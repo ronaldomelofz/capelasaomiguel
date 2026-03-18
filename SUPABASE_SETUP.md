@@ -20,8 +20,10 @@ O Livro Razão usa **Supabase** como banco de dados — PostgreSQL open-source, 
 
 ### Netlify (recomendado — credenciais protegidas)
 Em **Site settings** → **Environment variables**, adicione:
-- `SUPABASE_URL` = sua Project URL
-- `SUPABASE_ANON_KEY` = chave anon (JWT)
+- `SUPABASE_URL` = sua Project URL (ex: `https://ybgawrsfqgcgsawshihp.supabase.co`)
+- `SUPABASE_ANON_KEY` = chave anon (JWT) — copie de **Settings** → **API** no dashboard Supabase
+
+**Importante:** A URL deve ser exatamente a mostrada no dashboard do projeto (Settings → API).
 
 ### Desenvolvimento local
 ```bash

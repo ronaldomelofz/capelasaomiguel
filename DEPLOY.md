@@ -22,8 +22,8 @@ No Netlify: **Site settings** → **Environment variables** → **Add variable**
 
 | Nome | Valor |
 |------|-------|
-| `SUPABASE_URL` | https://seu-projeto.supabase.co |
-| `SUPABASE_ANON_KEY` | sua chave anon (JWT) |
+| `SUPABASE_URL` | `https://ybgawrsfqgcgsawshihp.supabase.co` |
+| `SUPABASE_ANON_KEY` | Chave anon do dashboard (Settings → API) |
 
 As credenciais ficam protegidas — não vão para o repositório.
 
