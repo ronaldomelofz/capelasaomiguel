@@ -50,7 +50,12 @@ export async function login(emailOrUser, password) {
   const pwHash = await hashPassword(password);
   const input = String(emailOrUser || "").trim().toLowerCase();
 
-  let user = users.find(u => (u.email === emailOrUser || u.email?.toLowerCase() === input || (u.usuario && u.usuario.toLowerCase() === input)) && u.senhaHash === pwHash);
+  const matchUser = (u) => {
+    const emailMatch = u.email && u.email.trim().toLowerCase() === input;
+    const usuarioMatch = u.usuario && String(u.usuario).trim().toLowerCase() === input;
+    return (emailMatch || usuarioMatch) && u.senhaHash === pwHash;
+  };
+  let user = users.find(matchUser);
 
   if (!user && (input === "admin" || input === "administrador") && password === "admin") {
     let adminUser = users.find(u => u.perfil === PERFIS.ADMIN);
@@ -70,10 +75,13 @@ export async function login(emailOrUser, password) {
 
 export async function criarUsuarioLocal(nome, email, senha, perfil, cpf, endereco, usuario, observacoes) {
   const users = getUsuarios();
-  if (users.some(u => u.email === email)) throw new Error("E-mail já em uso");
+  const emailNorm = (email || "").trim().toLowerCase();
+  if (users.some(u => (u.email || "").trim().toLowerCase() === emailNorm)) throw new Error("E-mail já em uso");
+  const usuarioNorm = (usuario || "").trim() || null;
+  if (usuarioNorm && users.some(u => u.usuario && String(u.usuario).trim().toLowerCase() === usuarioNorm.toLowerCase())) throw new Error("Usuário de acesso já em uso");
   const uid = "u" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
   const senhaHash = await hashPassword(senha);
-  saveUsuario(uid, { nome, email, perfil, senhaHash, cpf: cpf || null, endereco: endereco || null, usuario: usuario || null, observacoes: observacoes || null, criadoEm: new Date().toISOString() });
+  saveUsuario(uid, { nome, email: (email || "").trim(), perfil, senhaHash, cpf: cpf || null, endereco: endereco || null, usuario: usuarioNorm, observacoes: (observacoes || "").trim() || null, criadoEm: new Date().toISOString() });
   return uid;
 }
 

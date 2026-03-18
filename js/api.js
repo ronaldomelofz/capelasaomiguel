@@ -61,6 +61,23 @@ export function deleteUsuario(uid) {
   save(KEYS.USUARIOS, load(KEYS.USUARIOS).filter(x => x.uid !== uid));
 }
 
+/** Importa usuários (merge por uid). Útil quando admin e usuário usam dispositivos diferentes. */
+export function importUsuarios(usuarios) {
+  if (!Array.isArray(usuarios) || !usuarios.length) return 0;
+  const list = load(KEYS.USUARIOS);
+  const byUid = new Map(list.map(u => [u.uid, u]));
+  let added = 0;
+  for (const u of usuarios) {
+    if (!u || !u.uid || !u.senhaHash) continue;
+    if (!byUid.has(u.uid)) {
+      byUid.set(u.uid, u);
+      added++;
+    }
+  }
+  save(KEYS.USUARIOS, Array.from(byUid.values()));
+  return added;
+}
+
 // ========== CATEGORIAS CUSTOM ==========
 export function getCategoriasCustom() {
   return load(KEYS.CATEGORIAS);

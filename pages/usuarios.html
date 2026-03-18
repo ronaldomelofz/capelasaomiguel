@@ -11,6 +11,7 @@
 <div class="topbar">
   <span class="topbar-title">👥 Cadastro de Usuários</span>
   <div class="topbar-actions">
+    <button class="btn btn-outline" onclick="exportarUsuarios()" title="Exportar para outro dispositivo">📤 Exportar usuários</button>
     <button class="btn btn-success" onclick="openModal('modal-novo-user')">+ Novo Usuário</button>
   </div>
 </div>
@@ -19,6 +20,7 @@
   <div class="alert alert-info mb-2">
     ℹ️ <strong>Admin:</strong> pode criar, editar e excluir lançamentos, gerenciar usuários e categorias.
     <strong>Visualizador:</strong> pode apenas consultar e exportar dados.
+    <strong>Outro dispositivo?</strong> Use "Exportar usuários" e envie o arquivo ao usuário para ele importar na tela de login.
   </div>
 
   <div id="user-alert" class="alert hidden"></div>
@@ -298,8 +300,17 @@
       editAlert.className = "alert alert-error";
       return;
     }
+    const usuarioNorm = usuario.trim() || null;
+    if (usuarioNorm) {
+      const outro = users.find(u => u.uid !== uid && u.usuario && String(u.usuario).trim().toLowerCase() === usuarioNorm.toLowerCase());
+      if (outro) {
+        editAlert.textContent = "Usuário de acesso já em uso por outro cadastro.";
+        editAlert.className = "alert alert-error";
+        return;
+      }
+    }
     try {
-      const update = { nome, email, perfil, endereco: endereco || null, usuario: usuario || null, cpf: cpf || null, observacoes: obs || null };
+      const update = { nome, email, perfil, endereco: endereco || null, usuario: usuarioNorm || null, cpf: cpf || null, observacoes: obs || null };
       if (novaSenha && novaSenha.length >= 6) {
         update.senhaHash = await hashPassword(novaSenha);
       }
@@ -336,6 +347,18 @@
         a + (b ? "." + b : "") + (c ? "." + c : "") + (d ? "-" + d : ""));
     });
   });
+
+  window.exportarUsuarios = function() {
+    const users = getUsuarios();
+    if (!users.length) { alert("Nenhum usuário para exportar."); return; }
+    const blob = new Blob([JSON.stringify(users, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "livro-razao-usuarios-" + new Date().toISOString().slice(0,10) + ".json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setAlert("user-alert", "✅ Arquivo exportado. Envie ao usuário para ele importar na tela de login.", "success");
+  };
 
   loadUsers();
 </script>

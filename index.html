@@ -44,11 +44,35 @@
     <div class="login-footer">
       <small>Sistema local — dados no navegador</small>
       <small style="display:block;margin-top:.5rem;opacity:.8">Admin padrão: <strong>admin</strong> / <strong>admin</strong></small>
+      <button type="button" class="btn btn-outline btn-sm" style="margin-top:.75rem;font-size:.8rem" onclick="document.getElementById('modal-import').classList.add('open')">📥 Importar usuários (outro dispositivo)</button>
+    </div>
+  </div>
+
+  <!-- Modal Importar Usuários -->
+  <div class="modal-overlay" id="modal-import">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <h3>Importar usuários</h3>
+        <button class="modal-close" onclick="document.getElementById('modal-import').classList.remove('open')">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted" style="font-size:.9rem">Se você foi cadastrado em outro computador, peça ao administrador o arquivo de usuários e importe aqui.</p>
+        <div id="import-alert" class="alert hidden"></div>
+        <div class="form-group">
+          <label>Arquivo JSON de usuários</label>
+          <input type="file" id="import-file" accept=".json,application/json" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="document.getElementById('modal-import').classList.remove('open')">Fechar</button>
+        <button class="btn btn-primary" onclick="doImportUsuarios()">Importar</button>
+      </div>
     </div>
   </div>
 
   <script type="module">
     import { login } from "./js/auth.js";
+    import { importUsuarios } from "./js/api.js";
 
     if (localStorage.getItem("livro_razao_session")) {
       try {
@@ -88,7 +112,7 @@
       const ok = await login(email, password);
       if (ok) window.location.href = "pages/dashboard.html";
       else {
-        err.textContent = "Usuário ou senha inválidos. Use admin/admin para o primeiro acesso.";
+        err.textContent = "Usuário ou senha inválidos. Use admin/admin para o primeiro acesso. Se foi cadastrado em outro computador, use \"Importar usuários\" abaixo.";
         err.classList.remove("hidden");
       }
       btnText.classList.remove("hidden");
@@ -98,6 +122,29 @@
     document.getElementById("password").addEventListener("keydown", e => {
       if (e.key === "Enter") doLogin();
     });
+
+    window.doImportUsuarios = async function() {
+      const input = document.getElementById("import-file");
+      const alertEl = document.getElementById("import-alert");
+      if (!input.files.length) {
+        alertEl.textContent = "Selecione um arquivo.";
+        alertEl.className = "alert alert-error";
+        return;
+      }
+      try {
+        const text = await input.files[0].text();
+        const data = JSON.parse(text);
+        const arr = Array.isArray(data) ? data : (data.usuarios || []);
+        const n = importUsuarios(arr);
+        alertEl.textContent = n > 0 ? `✅ ${n} usuário(s) importado(s). Tente fazer login.` : "Nenhum usuário novo para importar.";
+        alertEl.className = "alert " + (n > 0 ? "alert-success" : "alert-info");
+        input.value = "";
+        if (n > 0) document.getElementById("modal-import").classList.remove("open");
+      } catch (e) {
+        alertEl.textContent = "Arquivo inválido: " + (e.message || "erro");
+        alertEl.className = "alert alert-error";
+      }
+    };
   </script>
 </body>
 </html>
