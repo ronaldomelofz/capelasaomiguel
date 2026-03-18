@@ -186,8 +186,12 @@ export async function deleteUsuario(uid) {
 
 // ========== CATEGORIAS ==========
 export async function getCategoriasCustom() {
-  const data = await req("GET", "/categorias?select=*");
-  return (Array.isArray(data) ? data : []).map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo }));
+  try {
+    const data = await req("GET", "/categorias?select=*");
+    return (Array.isArray(data) ? data : []).map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo }));
+  } catch (e) {
+    return [];
+  }
 }
 
 export async function addCategoria(obj) {
@@ -202,8 +206,12 @@ export async function deleteCategoria(id) {
 
 // ========== FORMAS DE PAGAMENTO ==========
 export async function getFormasPagamentoCustom() {
-  const data = await req("GET", "/formas_pagamento?select=*");
-  return (Array.isArray(data) ? data : []).map((r) => ({ id: r.id, nome: r.nome }));
+  try {
+    const data = await req("GET", "/formas_pagamento?select=*");
+    return (Array.isArray(data) ? data : []).map((r) => ({ id: r.id, nome: r.nome }));
+  } catch (e) {
+    return [];
+  }
 }
 
 export async function addFormaPagamento(nome) {

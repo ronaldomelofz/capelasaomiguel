@@ -84,18 +84,28 @@
 
   async function populateFormasPagamento() {
     const sel = document.getElementById("forma-pagto");
-    const custom = (await getFormasPagamentoCustom()).map(f => f.nome);
-    const formas = [...FORMAS_PAGAMENTO_PADRAO, ...custom];
+    if (!sel) return;
     sel.innerHTML = '<option value="">— Selecione —</option>';
-    formas.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
+    try {
+      const custom = (await getFormasPagamentoCustom()).map(f => f.nome);
+      const formas = [...FORMAS_PAGAMENTO_PADRAO, ...custom];
+      formas.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
+    } catch (e) {
+      FORMAS_PAGAMENTO_PADRAO.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
+    }
   }
 
   async function populateCategories(tipo) {
     const sel = document.getElementById("categoria");
+    if (!sel) return;
     sel.innerHTML = '<option value="">— Selecione a categoria —</option>';
     const defaults = tipo === "receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
-    const custom = (await getCategoriasCustom()).filter(c => c.tipo === tipo).map(c => c.nome);
-    [...defaults, ...custom].forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    try {
+      const custom = (await getCategoriasCustom()).filter(c => c.tipo === tipo).map(c => c.nome);
+      [...defaults, ...custom].forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    } catch (e) {
+      defaults.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    }
   }
   populateCategories("receita");
   populateFormasPagamento();
