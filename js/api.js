@@ -1,8 +1,9 @@
-// js/api.js — API Supabase via REST (fetch nativo, sem cliente JS)
+// js/api.js — API Supabase via REST (fetch) + fallback localStorage
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase-config.js";
 
 const BASE = (SUPABASE_URL || "").replace(/\/$/, "") + "/rest/v1";
+const STORAGE_KEY = "livro_razao_usuarios";
 
 function headers() {
   const key = SUPABASE_ANON_KEY;
@@ -18,7 +19,7 @@ function headers() {
 }
 
 async function req(method, path, body) {
-  const opt = { method, headers: headers() };
+  const opt = { method, headers: headers(), mode: "cors" };
   if (body) opt.body = JSON.stringify(body);
   const r = await fetch(BASE + path, opt);
   const text = await r.text();
@@ -29,6 +30,17 @@ async function req(method, path, body) {
     throw new Error(msg);
   }
   return data;
+}
+
+function loadLocalUsuarios() {
+  try {
+    const d = localStorage.getItem(STORAGE_KEY);
+    return d ? JSON.parse(d) : [];
+  } catch { return []; }
+}
+
+function saveLocalUsuarios(arr) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
 }
 
 // Mapeamento snake_case <-> camelCase
@@ -110,8 +122,16 @@ export async function getLancamentoById(id) {
 
 // ========== USUÁRIOS ==========
 export async function getUsuarios() {
-  const data = await req("GET", "/usuarios?select=*");
-  return (Array.isArray(data) ? data : []).map(toUsuario);
+  try {
+    const data = await req("GET", "/usuarios?select=*");
+    const users = (Array.isArray(data) ? data : []).map(toUsuario);
+    if (users.length) saveLocalUsuarios(users);
+    return users;
+  } catch (e) {
+    const local = loadLocalUsuarios();
+    if (local.length) return local;
+    return [];
+  }
 }
 
 export async function getUsuarioById(uid) {
@@ -134,15 +154,29 @@ export async function saveUsuario(uid, data) {
   const senhaHash = data.senhaHash ?? data.senha_hash;
   if (senhaHash) row.senha_hash = senhaHash;
 
-  const existing = await req("GET", "/usuarios?uid=eq." + encodeURIComponent(uid) + "&select=uid&limit=1");
-  const hasExisting = Array.isArray(existing) && existing.length > 0;
+  try {
+    const existing = await req("GET", "/usuarios?uid=eq." + encodeURIComponent(uid) + "&select=uid&limit=1");
+    const hasExisting = Array.isArray(existing) && existing.length > 0;
 
-  if (hasExisting) {
-    await req("PATCH", "/usuarios?uid=eq." + encodeURIComponent(uid), row);
-  } else {
-    if (!row.senha_hash) throw new Error("Senha é obrigatória para novo usuário");
-    row.criado_em = new Date().toISOString();
-    await req("POST", "/usuarios", row);
+    if (hasExisting) {
+      await req("PATCH", "/usuarios?uid=eq." + encodeURIComponent(uid), row);
+    } else {
+      if (!row.senha_hash) throw new Error("Senha é obrigatória para novo usuário");
+      row.criado_em = new Date().toISOString();
+      await req("POST", "/usuarios", row);
+    }
+  } catch (e) {
+    const local = loadLocalUsuarios();
+    const u = {
+      uid, nome: row.nome, email: row.email, usuario: row.usuario,
+      senhaHash: row.senha_hash, perfil: row.perfil, cpf: row.cpf,
+      endereco: row.endereco, observacoes: row.observacoes,
+      criadoEm: row.criado_em || new Date().toISOString()
+    };
+    const idx = local.findIndex(x => x.uid === uid);
+    if (idx >= 0) local[idx] = { ...local[idx], ...u };
+    else local.push(u);
+    saveLocalUsuarios(local);
   }
 }
 
