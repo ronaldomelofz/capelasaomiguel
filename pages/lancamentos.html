@@ -178,7 +178,8 @@
     const o = document.createElement("option"); o.value = y; o.textContent = y; anoEl.appendChild(o);
   }
 
-  const customCats = (await getCategoriasCustom()).map(c => c.nome);
+  let customCats = [];
+  try { customCats = (await getCategoriasCustom()).map(c => c.nome); } catch (e) {}
   const cats = [...new Set([...CATEGORIAS_RECEITA, ...CATEGORIAS_DESPESA, ...customCats])].sort();
   const catEl = document.getElementById("f-cat");
   cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catEl.appendChild(o); });

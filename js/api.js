@@ -208,12 +208,17 @@ async function syncPendingLancamentos() {
 // ========== LANÇAMENTOS ==========
 export async function getLancamentos() {
   try {
-    await syncPendingLancamentos();
     const data = await req("GET", "/lancamentos?select=*&order=data.desc");
     const list = (Array.isArray(data) ? data : []).map(toLancamento);
     if (list.length) saveLocal(KEY_LANCAMENTOS, list);
-    return list;
+    const pending = loadPendingLancamentos();
+    const ids = new Set(list.map(x => x.id));
+    const extra = pending.filter(p => !ids.has(p.id)).map(toLancamento);
+    const merged = [...extra, ...list].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+    syncPendingLancamentos().catch(() => {});
+    return merged;
   } catch (e) {
+    syncPendingLancamentos().catch(() => {});
     const local = loadLocal(KEY_LANCAMENTOS);
     const pending = loadPendingLancamentos();
     const merged = [...pending, ...local.filter(l => !pending.some(p => p.id === l.id))];
