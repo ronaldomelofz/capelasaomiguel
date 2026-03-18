@@ -1,76 +1,27 @@
-# 🚀 Guia de Deploy - Livro Razão
+# 🚀 Deploy — Livro Razão
 
-## ✅ Status do Deploy
+## Status
 
-- **Site em produção:** https://capelasaomiguel.netlify.app
-- **Repositório GitHub:** https://github.com/ronaldomelofz/capelasaomiguel
-- **Painel Netlify:** https://app.netlify.com/projects/capelasaomiguel
+- **Site:** https://capelasaomiguel.netlify.app
+- **Repositório:** https://github.com/ronaldomelofz/capelasaomiguel
 
----
+## Tecnologia
 
-## Conectar GitHub para Deploy Automático
+- **localStorage** — dados no navegador (sem Firebase, sem backend)
+- **Netlify** — hospedagem estática
+- **GitHub** — repositório
 
-Para que cada `git push` dispare um novo deploy automaticamente:
+## Deploy
 
-1. Acesse [Netlify → capelasaomiguel → Site settings](https://app.netlify.com/projects/capelasaomiguel/configuration)
-2. Em **Build & deploy** → **Continuous deployment** → **Link repository**
-3. Conecte ao GitHub e selecione `ronaldomelofz/capelasaomiguel`
-4. Configurações (já no `netlify.toml`):
-   - Build command: `node scripts/build-config.js`
-   - Publish directory: `.`
-   - Branch: `main`
+1. `git push` para o GitHub
+2. Netlify faz deploy automático (se conectado)
 
----
-
-## Configuração Rápida (Netlify + GitHub)
-
-### 0. Domínio autorizado no Firebase (obrigatório)
-
-No [Firebase Console](https://console.firebase.google.com) → **Authentication** → **Settings** (Configurações) → **Authorized domains** (Domínios autorizados):
-- Adicione `capelasaomiguel.netlify.app`
-- Sem isso, o login falha com "auth/network-request-failed"
-
-### 1. Variáveis de Ambiente no Netlify
-
-Após conectar o repositório ao Netlify, configure em **Site settings → Environment variables**:
-
-| Variável | Descrição |
-|----------|-----------|
-| `FIREBASE_API_KEY` | API Key do Firebase |
-| `FIREBASE_AUTH_DOMAIN` | `seu-projeto.firebaseapp.com` |
-| `FIREBASE_PROJECT_ID` | ID do projeto Firebase |
-| `FIREBASE_STORAGE_BUCKET` | `seu-projeto.appspot.com` |
-| `FIREBASE_MESSAGING_SENDER_ID` | Sender ID |
-| `FIREBASE_APP_ID` | App ID |
-
-Obtenha esses valores em: [Firebase Console](https://console.firebase.google.com) → Seu projeto → Configurações ⚙️ → Seus apps → Web.
-
-### 2. Conectar GitHub ao Netlify
-
-1. Acesse [app.netlify.com](https://app.netlify.com)
-2. **Add new site** → **Import an existing project**
-3. Conecte ao **GitHub** e selecione o repositório `capelasaomiguel`
-4. Configurações de build (já definidas no `netlify.toml`):
-   - **Build command:** `node scripts/build-config.js`
-   - **Publish directory:** `.`
-5. Adicione as variáveis de ambiente (passo 1)
-6. Clique em **Deploy site**
-
-### 3. Deploy via Linha de Comando
-
+Ou manualmente:
 ```bash
-# Instalar Netlify CLI
-npm install -g netlify-cli
-
-# Login (abre o navegador)
-netlify login
-
-# Deploy
-netlify deploy --prod
+netlify deploy --prod --dir=.
 ```
 
----
+## Primeiro acesso
 
-## Desenvolvimento Local
-
-Para rodar localmente sem build, edite `js/config.js` diretamente com suas credenciais Firebase.
+- Usuário: **admin**
+- Senha: **admin**

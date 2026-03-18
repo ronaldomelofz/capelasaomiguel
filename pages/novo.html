@@ -14,23 +14,15 @@
 
 <div class="page-body">
   <div style="max-width:640px;margin:0 auto;">
-
     <div id="form-alert" class="alert hidden"></div>
-
     <div class="card">
       <div class="form-section-title">Tipo de Lançamento</div>
       <div class="tipo-selector">
-        <button class="tipo-btn receita selected" id="btn-receita" onclick="setTipo('receita')">
-          📈 Receita
-        </button>
-        <button class="tipo-btn despesa" id="btn-despesa" onclick="setTipo('despesa')">
-          📉 Despesa
-        </button>
+        <button class="tipo-btn receita selected" id="btn-receita" onclick="setTipo('receita')">📈 Receita</button>
+        <button class="tipo-btn despesa" id="btn-despesa" onclick="setTipo('despesa')">📉 Despesa</button>
       </div>
       <input type="hidden" id="tipo" value="receita" />
-
       <div class="form-section-title mt-2">Dados do Lançamento</div>
-
       <div class="form-row cols-2">
         <div class="form-group">
           <label for="data">Data *</label>
@@ -41,88 +33,68 @@
           <input type="text" id="valor" placeholder="0,00" inputmode="decimal" />
         </div>
       </div>
-
       <div class="form-group">
         <label for="categoria">Categoria *</label>
         <select id="categoria"></select>
       </div>
-
       <div class="form-group">
         <label for="descricao">Descrição *</label>
         <input type="text" id="descricao" placeholder="Descreva o lançamento" maxlength="200" />
       </div>
-
       <div class="form-group">
         <label for="responsavel">Responsável</label>
         <input type="text" id="responsavel" placeholder="Nome do responsável (opcional)" />
       </div>
-
       <div class="form-section-title mt-2">Observações e Comprovante</div>
-
       <div class="form-group">
         <label for="observacoes">Observações</label>
-        <textarea id="observacoes" placeholder="Informações adicionais, número de documento, referências, etc." rows="3"></textarea>
+        <textarea id="observacoes" placeholder="Informações adicionais..." rows="3"></textarea>
       </div>
-
       <div class="form-group">
         <label for="numero-doc">Nº do Documento / Recibo</label>
         <input type="text" id="numero-doc" placeholder="Ex: NF 0001, Recibo 123..." />
       </div>
-
       <div class="form-group">
         <label for="forma-pagto">Forma de Pagamento</label>
         <select id="forma-pagto">
           <option value="">— Selecione —</option>
-          <option>Dinheiro</option>
-          <option>PIX</option>
-          <option>Transferência Bancária</option>
-          <option>Cheque</option>
-          <option>Cartão de Débito</option>
-          <option>Cartão de Crédito</option>
-          <option>Boleto</option>
+          <option>Dinheiro</option><option>PIX</option><option>Transferência Bancária</option>
+          <option>Cheque</option><option>Cartão de Débito</option><option>Cartão de Crédito</option><option>Boleto</option>
         </select>
       </div>
-
       <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem;">
         <a href="lancamentos.html" class="btn btn-outline">Cancelar</a>
-        <button class="btn btn-primary" onclick="salvarLancamento()" id="btn-salvar">
-          💾 Salvar Lançamento
-        </button>
+        <button class="btn btn-primary" onclick="salvarLancamento()" id="btn-salvar">💾 Salvar Lançamento</button>
       </div>
     </div>
   </div>
 </div>
 
 <script type="module">
-  import { requireAuth, isAdmin, getDB, formatBRL } from "../js/auth.js";
+  import { requireAuth, isAdmin } from "../js/auth.js";
   import { renderLayout } from "../js/layout.js";
   import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA } from "../js/config.js";
-  import { collection, addDoc, serverTimestamp }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { addLancamento, getCategoriasCustom } from "../js/api.js";
 
   renderLayout("novo");
   const { user, profile } = await requireAuth();
 
-  // Admin guard
   if (!isAdmin(profile)) {
-    document.querySelector(".page-body").innerHTML = `
-      <div class="alert alert-error">⛔ Acesso negado. Apenas administradores podem criar lançamentos.</div>`;
+    document.querySelector(".page-body").innerHTML = `<div class="alert alert-error">⛔ Acesso negado. Apenas administradores podem criar lançamentos.</div>`;
     throw new Error("Acesso negado");
   }
 
-  // Set today as default date
   document.getElementById("data").value = new Date().toISOString().split("T")[0];
 
-  // Populate categories
   function populateCategories(tipo) {
     const sel = document.getElementById("categoria");
     sel.innerHTML = '<option value="">— Selecione a categoria —</option>';
-    const cats = tipo === "receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
-    cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    const defaults = tipo === "receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
+    const custom = getCategoriasCustom().filter(c => c.tipo === tipo).map(c => c.nome);
+    [...defaults, ...custom].forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
   }
   populateCategories("receita");
 
-  // Currency mask
   const valorEl = document.getElementById("valor");
   valorEl.addEventListener("input", () => {
     let v = valorEl.value.replace(/\D/g, "");
@@ -138,19 +110,19 @@
     populateCategories(tipo);
   };
 
-  window.salvarLancamento = async function() {
+  window.salvarLancamento = function() {
     const alertEl = document.getElementById("form-alert");
     alertEl.className = "alert hidden";
 
-    const tipo      = document.getElementById("tipo").value;
-    const data      = document.getElementById("data").value;
-    const valorRaw  = document.getElementById("valor").value.replace(/\./g,"").replace(",",".");
-    const valor     = parseFloat(valorRaw);
+    const tipo = document.getElementById("tipo").value;
+    const data = document.getElementById("data").value;
+    const valorRaw = document.getElementById("valor").value.replace(/\./g,"").replace(",",".");
+    const valor = parseFloat(valorRaw);
     const categoria = document.getElementById("categoria").value;
     const descricao = document.getElementById("descricao").value.trim();
     const responsavel = document.getElementById("responsavel").value.trim();
     const observacoes = document.getElementById("observacoes").value.trim();
-    const numDoc    = document.getElementById("numero-doc").value.trim();
+    const numDoc = document.getElementById("numero-doc").value.trim();
     const formaPagto = document.getElementById("forma-pagto").value;
 
     if (!data || !valor || !categoria || !descricao) {
@@ -167,42 +139,31 @@
     const btn = document.getElementById("btn-salvar");
     btn.disabled = true; btn.textContent = "Salvando...";
 
-    try {
-      const db = getDB();
-      await addDoc(collection(db, "lancamentos"), {
-        tipo, data, valor, categoria, descricao,
-        responsavel: responsavel || null,
-        observacoes: observacoes || null,
-        numeroDocumento: numDoc || null,
-        formaPagamento: formaPagto || null,
-        criadoPor: user.uid,
-        criadoPorEmail: user.email,
-        criadoEm: serverTimestamp(),
-        mes: parseInt(data.split("-")[1]),
-        ano: parseInt(data.split("-")[0])
-      });
+    const [y, m] = data.split("-");
+    addLancamento({
+      tipo, data, valor, categoria, descricao,
+      responsavel: responsavel || null,
+      observacoes: observacoes || null,
+      numeroDocumento: numDoc || null,
+      formaPagamento: formaPagto || null,
+      criadoPor: user.uid,
+      criadoPorEmail: user.email,
+      mes: parseInt(m, 10),
+      ano: parseInt(y, 10)
+    });
 
-      alertEl.textContent = "✅ Lançamento salvo com sucesso!";
-      alertEl.className = "alert alert-success";
-
-      // Reset form
-      document.getElementById("data").value = new Date().toISOString().split("T")[0];
-      document.getElementById("valor").value = "";
-      document.getElementById("categoria").value = "";
-      document.getElementById("descricao").value = "";
-      document.getElementById("responsavel").value = "";
-      document.getElementById("observacoes").value = "";
-      document.getElementById("numero-doc").value = "";
-      document.getElementById("forma-pagto").value = "";
-
-      setTimeout(() => { alertEl.className = "alert hidden"; }, 4000);
-    } catch (e) {
-      console.error(e);
-      alertEl.textContent = "Erro ao salvar lançamento. Tente novamente.";
-      alertEl.className = "alert alert-error";
-    } finally {
-      btn.disabled = false; btn.textContent = "💾 Salvar Lançamento";
-    }
+    alertEl.textContent = "✅ Lançamento salvo com sucesso!";
+    alertEl.className = "alert alert-success";
+    document.getElementById("data").value = new Date().toISOString().split("T")[0];
+    document.getElementById("valor").value = "";
+    document.getElementById("categoria").value = "";
+    document.getElementById("descricao").value = "";
+    document.getElementById("responsavel").value = "";
+    document.getElementById("observacoes").value = "";
+    document.getElementById("numero-doc").value = "";
+    document.getElementById("forma-pagto").value = "";
+    setTimeout(() => { alertEl.className = "alert hidden"; }, 4000);
+    btn.disabled = false; btn.textContent = "💾 Salvar Lançamento";
   };
 </script>
 </body>

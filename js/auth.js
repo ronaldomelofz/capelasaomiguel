@@ -1,70 +1,80 @@
-// js/auth.js — Authentication guard shared across all pages
+// js/auth.js — Autenticação local (localStorage, sem Firebase)
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { FIREBASE_CONFIG, PERFIS } from "./config.js";
+import { PERFIS } from "./config.js";
+import { getUsuarios, saveUsuario } from "./api.js";
 
-let _app, _auth, _db, _currentUser, _userProfile;
+const SESSION_KEY = "livro_razao_session";
+const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 dias
 
-export function getApp() {
-  if (!_app) _app = initializeApp(FIREBASE_CONFIG);
-  return _app;
+export async function hashPassword(pw) {
+  const enc = new TextEncoder();
+  const buf = await crypto.subtle.digest("SHA-256", enc.encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function getAuthInstance() {
-  if (!_auth) _auth = getAuth(getApp());
-  return _auth;
+function getSession() {
+  try {
+    const s = localStorage.getItem(SESSION_KEY);
+    if (!s) return null;
+    const data = JSON.parse(s);
+    if (data.expires && Date.now() > data.expires) { localStorage.removeItem(SESSION_KEY); return null; }
+    return data;
+  } catch { return null; }
 }
 
-export function getDB() {
-  if (!_db) _db = getFirestore(getApp());
-  return _db;
+function setSession(user, profile) {
+  const data = { user: { uid: user.uid, email: user.email }, profile, expires: Date.now() + SESSION_DURATION };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
 }
 
-/**
- * requireAuth — call at the top of every protected page.
- * Redirects to login if not authenticated.
- * Returns { user, profile } on success.
- */
+export function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  window.location.href = "../index.html";
+}
+
 export async function requireAuth() {
-  const auth = getAuthInstance();
-  const db = getDB();
-
-  return new Promise((resolve, reject) => {
-    onAuthStateChanged(auth, async user => {
-      if (!user) {
-        window.location.href = "../index.html";
-        return;
-      }
-      _currentUser = user;
-
-      // Load user profile from Firestore
-      try {
-        const snap = await getDoc(doc(db, "usuarios", user.uid));
-        if (snap.exists()) {
-          _userProfile = snap.data();
-        } else {
-          // First-time admin bootstrap: if no users exist, make this user admin
-          _userProfile = { perfil: PERFIS.VISUALIZADOR, nome: user.email };
-        }
-        populateNavUser(_userProfile, user);
-        resolve({ user, profile: _userProfile });
-      } catch (e) {
-        console.error("Erro ao carregar perfil:", e);
-        resolve({ user, profile: { perfil: PERFIS.VISUALIZADOR, nome: user.email } });
-      }
-    });
-  });
+  const session = getSession();
+  if (!session) { window.location.href = "../index.html"; return; }
+  const user = session.user;
+  const profile = session.profile || { perfil: PERFIS.VISUALIZADOR, nome: user.email };
+  populateNavUser(profile, user);
+  return { user, profile };
 }
 
 export function isAdmin(profile) {
   return profile && profile.perfil === PERFIS.ADMIN;
 }
 
-export async function logout() {
-  await signOut(getAuthInstance());
-  window.location.href = "../index.html";
+export async function login(emailOrUser, password) {
+  const users = getUsuarios();
+  const pwHash = await hashPassword(password);
+  const input = String(emailOrUser || "").trim().toLowerCase();
+
+  let user = users.find(u => (u.email === emailOrUser || u.email?.toLowerCase() === input || (u.usuario && u.usuario.toLowerCase() === input)) && u.senhaHash === pwHash);
+
+  if (!user && (input === "admin" || input === "administrador") && password === "admin") {
+    let adminUser = users.find(u => u.perfil === PERFIS.ADMIN);
+    if (!adminUser) {
+      const uid = "admin_" + Date.now();
+      const defaultAdmin = { uid, email: "admin@capelasaomiguel.com", nome: "Administrador", perfil: PERFIS.ADMIN, senhaHash: await hashPassword("admin") };
+      saveUsuario(uid, defaultAdmin);
+      adminUser = defaultAdmin;
+    }
+    if (adminUser && adminUser.senhaHash === pwHash) user = adminUser;
+  }
+
+  if (!user) return false;
+  setSession({ uid: user.uid, email: user.email }, user);
+  return true;
+}
+
+export async function criarUsuarioLocal(nome, email, senha, perfil, cpf, endereco, usuario, observacoes) {
+  const users = getUsuarios();
+  if (users.some(u => u.email === email)) throw new Error("E-mail já em uso");
+  const uid = "u" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+  const senhaHash = await hashPassword(senha);
+  saveUsuario(uid, { nome, email, perfil, senhaHash, cpf: cpf || null, endereco: endereco || null, usuario: usuario || null, observacoes: observacoes || null, criadoEm: new Date().toISOString() });
+  return uid;
 }
 
 function populateNavUser(profile, user) {
@@ -75,35 +85,31 @@ function populateNavUser(profile, user) {
     badge.textContent = profile.perfil === PERFIS.ADMIN ? "Admin" : "Visualizador";
     badge.className = "role-badge " + (profile.perfil === PERFIS.ADMIN ? "badge-admin" : "badge-viewer");
   }
-  // Hide admin-only nav items for viewers
   if (profile.perfil !== PERFIS.ADMIN) {
     document.querySelectorAll(".admin-only").forEach(el => el.style.display = "none");
   }
 }
 
-// ============================================================
-//  Utilities
-// ============================================================
+// Utilities
 export function formatBRL(value) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 }
 
 export function formatDate(dateStr) {
   if (!dateStr) return "";
-  const [y, m, d] = dateStr.split("-");
-  return `${d}/${m}/${y}`;
+  const [y, m, d] = String(dateStr).split("-");
+  return d && m && y ? `${d}/${m}/${y}` : dateStr;
 }
 
 export function formatDatetime(ts) {
   if (!ts) return "";
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const d = typeof ts === "string" ? new Date(ts) : (ts.toDate ? ts.toDate() : new Date(ts));
   return d.toLocaleString("pt-BR");
 }
 
 export function getMonthName(num) {
-  const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  return months[num - 1] || "";
+  const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  return months[Number(num) - 1] || "";
 }
 
 export function currentMonthYear() {

@@ -39,43 +39,35 @@
         <span id="btn-login-text">Entrar</span>
         <span id="btn-login-loading" class="hidden">Aguarde...</span>
       </button>
-
-      <div class="login-links">
-        <a href="#" onclick="doPasswordReset()">Esqueceu a senha?</a>
-      </div>
     </div>
 
     <div class="login-footer">
-      <small>Sistema seguro com Firebase Authentication</small>
+      <small>Sistema local — dados no navegador</small>
       <small style="display:block;margin-top:.5rem;opacity:.8">Admin padrão: <strong>admin</strong> / <strong>admin</strong></small>
     </div>
   </div>
 
-  <!-- Firebase SDKs -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged }
-      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { FIREBASE_CONFIG, ADMIN_DEFAULT } from "./js/config.js";
+    import { login } from "./js/auth.js";
 
-    const app = initializeApp(FIREBASE_CONFIG);
-    const auth = getAuth(app);
-
-    // Redirect if already logged in
-    onAuthStateChanged(auth, user => {
-      if (user) window.location.href = "pages/dashboard.html";
-    });
-
-    function getLoginEmail(input) {
-      const val = input.trim().toLowerCase();
-      const aliases = ADMIN_DEFAULT.usernames || [ADMIN_DEFAULT.username];
-      if (aliases.some(a => val === String(a).toLowerCase())) return ADMIN_DEFAULT.email;
-      return input.trim();
+    if (localStorage.getItem("livro_razao_session")) {
+      try {
+        const s = JSON.parse(localStorage.getItem("livro_razao_session"));
+        if (s.expires > Date.now()) window.location.href = "pages/dashboard.html";
+      } catch {}
     }
 
+    window.togglePassword = function() {
+      const input = document.getElementById("password");
+      const btn = document.getElementById("btn-toggle-password");
+      const isPass = input.type === "password";
+      input.type = isPass ? "text" : "password";
+      btn.textContent = isPass ? "🙈" : "👁";
+      btn.setAttribute("aria-label", isPass ? "Ocultar senha" : "Mostrar senha");
+    };
+
     window.doLogin = async function() {
-      const loginInput = document.getElementById("email").value.trim();
-      const email = getLoginEmail(loginInput);
+      const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
       const err = document.getElementById("login-error");
       const btnText = document.getElementById("btn-login-text");
@@ -85,51 +77,22 @@
       btnText.classList.add("hidden");
       btnLoad.classList.remove("hidden");
 
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-        window.location.href = "pages/dashboard.html";
-      } catch (e) {
-        let msg = "Erro ao fazer login.";
-        const code = e.code || "";
-        if (code === "auth/user-not-found" || code === "auth/invalid-credential")
-          msg = "Usuário não encontrado. Crie o admin no Firebase Console (Authentication > Add user) com e-mail " + (ADMIN_DEFAULT.email || "admin@capelasaomiguel.com") + " e senha admin.";
-        else if (code === "auth/wrong-password")
-          msg = "Senha incorreta. Use 'admin' para o usuário padrão.";
-        else if (code === "auth/too-many-requests")
-          msg = "Muitas tentativas. Aguarde um momento.";
-        else if (code === "auth/invalid-api-key" || code === "auth/configuration-not-found" || code === "auth/project-not-found")
-          msg = "Firebase não configurado. Configure as variáveis de ambiente no Netlify (FIREBASE_API_KEY, FIREBASE_PROJECT_ID, etc.).";
-        else if (code === "auth/network-request-failed")
-          msg = "Erro de rede. Verifique: 1) Firebase Console > Authentication > Settings > adicione 'capelasaomiguel.netlify.app' em Domínios autorizados. 2) Variáveis do Firebase no Netlify.";
-        else if (code.startsWith("auth/"))
-          msg = "Erro de autenticação: " + (e.message || code);
-        err.textContent = msg;
+      if (!email || !password) {
+        err.textContent = "Preencha usuário e senha.";
         err.classList.remove("hidden");
-      } finally {
         btnText.classList.remove("hidden");
         btnLoad.classList.add("hidden");
+        return;
       }
-    };
 
-    window.doPasswordReset = async function() {
-      const loginInput = document.getElementById("email").value.trim();
-      const email = getLoginEmail(loginInput);
-      if (!loginInput) { alert("Digite seu e-mail ou usuário primeiro."); return; }
-      try {
-        await sendPasswordResetEmail(auth, email);
-        alert("E-mail de recuperação enviado!");
-      } catch (e) {
-        alert("Erro: verifique o e-mail informado.");
+      const ok = await login(email, password);
+      if (ok) window.location.href = "pages/dashboard.html";
+      else {
+        err.textContent = "Usuário ou senha inválidos. Use admin/admin para o primeiro acesso.";
+        err.classList.remove("hidden");
       }
-    };
-
-    window.togglePassword = function() {
-      const input = document.getElementById("password");
-      const btn = document.getElementById("btn-toggle-password");
-      const isPass = input.type === "password";
-      input.type = isPass ? "text" : "password";
-      btn.textContent = isPass ? "🙈" : "👁";
-      btn.setAttribute("aria-label", isPass ? "Ocultar senha" : "Mostrar senha");
+      btnText.classList.remove("hidden");
+      btnLoad.classList.add("hidden");
     };
 
     document.getElementById("password").addEventListener("keydown", e => {

@@ -95,15 +95,13 @@
 </div>
 
 <script type="module">
-  import { requireAuth, isAdmin, getDB, formatBRL, formatDate, formatDatetime } from "../js/auth.js";
+  import { requireAuth, isAdmin, formatBRL, formatDate, formatDatetime } from "../js/auth.js";
   import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA } from "../js/config.js";
   import { renderLayout } from "../js/layout.js";
-  import { collection, query, where, orderBy, getDocs, deleteDoc, doc }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getLancamentos, deleteLancamento, getCategoriasCustom } from "../js/api.js";
 
   renderLayout("lancamentos");
   const { user, profile } = await requireAuth();
-  const db = getDB();
   const admin = isAdmin(profile);
 
   let allDocs = [];
@@ -123,13 +121,13 @@
     const o = document.createElement("option"); o.value = y; o.textContent = y; anoEl.appendChild(o);
   }
 
-  const cats = [...CATEGORIAS_RECEITA, ...CATEGORIAS_DESPESA].sort();
+  const customCats = getCategoriasCustom().map(c => c.nome);
+  const cats = [...new Set([...CATEGORIAS_RECEITA, ...CATEGORIAS_DESPESA, ...customCats])].sort();
   const catEl = document.getElementById("f-cat");
   cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catEl.appendChild(o); });
 
-  async function loadAll() {
-    const snap = await getDocs(query(collection(db, "lancamentos"), orderBy("data", "desc")));
-    allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  function loadAll() {
+    allDocs = getLancamentos();
     applyFilters();
   }
 
@@ -245,18 +243,14 @@
     document.getElementById("modal-detalhe").classList.add("open");
   };
 
-  window.excluirLancamento = async function() {
+  window.excluirLancamento = function() {
     if (!selectedId) return;
     if (!confirm("Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.")) return;
-    try {
-      await deleteDoc(doc(db, "lancamentos", selectedId));
-      allDocs = allDocs.filter(d => d.id !== selectedId);
-      closeModal("modal-detalhe");
-      applyFilters();
-      alert("Lançamento excluído com sucesso.");
-    } catch (e) {
-      alert("Erro ao excluir: " + e.message);
-    }
+    deleteLancamento(selectedId);
+    allDocs = allDocs.filter(d => d.id !== selectedId);
+    closeModal("modal-detalhe");
+    applyFilters();
+    alert("Lançamento excluído com sucesso.");
   };
 
   window.closeModal = id => document.getElementById(id).classList.remove("open");

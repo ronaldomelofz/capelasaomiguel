@@ -44,14 +44,12 @@
 </div>
 
 <script type="module">
-  import { requireAuth, getDB, formatBRL, formatDate, getMonthName } from "../js/auth.js";
+  import { requireAuth, formatBRL, formatDate, getMonthName } from "../js/auth.js";
   import { renderLayout } from "../js/layout.js";
-  import { collection, query, where, orderBy, getDocs }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getLancamentos } from "../js/api.js";
 
   renderLayout("relatorios");
   await requireAuth();
-  const db = getDB();
 
   const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const now = new Date();
@@ -72,21 +70,20 @@
 
   let chartInst = null;
 
-  async function fetchPeriod(mes, ano) {
-    const start = `${ano}-${String(mes).padStart(2,"0")}-01`;
-    const end   = `${ano}-${String(mes).padStart(2,"0")}-31`;
-    const snap  = await getDocs(query(collection(db,"lancamentos"),
-      where("data",">=",start), where("data","<=",end), orderBy("data")));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  function fetchPeriod(mes, ano) {
+    const all = getLancamentos();
+    return all.filter(d => {
+      const m = d.mes || (d.data ? parseInt(d.data.split("-")[1], 10) : 0);
+      const y = d.ano || (d.data ? parseInt(d.data.split("-")[0], 10) : 0);
+      return m === mes && y === ano;
+    });
   }
 
-  async function fetchYear(ano) {
-    const snap = await getDocs(query(collection(db,"lancamentos"),
-      where("ano","==",+ano), orderBy("data")));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  function fetchYear(ano) {
+    return getLancamentos().filter(d => (d.ano || (d.data ? parseInt(d.data.split("-")[0], 10) : 0)) === ano);
   }
 
-  window.renderReport = async function() {
+  window.renderReport = function() {
     const tipo = document.getElementById("rel-tipo").value;
     const mes  = +document.getElementById("rel-mes").value;
     const ano  = +document.getElementById("rel-ano").value;
@@ -96,8 +93,8 @@
     if (chartInst) { chartInst.destroy(); chartInst = null; }
 
     let docs = tipo === "anual" || tipo === "comparativo"
-      ? await fetchYear(ano)
-      : await fetchPeriod(mes, ano);
+      ? fetchYear(ano)
+      : fetchPeriod(mes, ano);
 
     if (tipo === "mensal") renderMensal(docs, mes, ano, cont);
     else if (tipo === "anual") renderAnual(docs, ano, cont);

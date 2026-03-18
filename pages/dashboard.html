@@ -21,7 +21,6 @@
 <div class="page-body">
   <div id="dash-alert" class="alert alert-info hidden"></div>
 
-  <!-- KPIs -->
   <div class="kpi-grid">
     <div class="kpi-tile receita">
       <div class="kpi-label">Receitas do Mês</div>
@@ -45,7 +44,6 @@
     </div>
   </div>
 
-  <!-- Charts -->
   <div class="chart-grid">
     <div class="card">
       <div class="card-header"><span class="card-title">Receitas × Despesas (12 meses)</span></div>
@@ -57,7 +55,6 @@
     </div>
   </div>
 
-  <!-- Recent transactions -->
   <div class="card">
     <div class="card-header">
       <span class="card-title">Últimos Lançamentos</span>
@@ -79,17 +76,13 @@
 </div>
 
 <script type="module">
-  import { requireAuth, formatBRL, formatDate, getDB } from "../js/auth.js";
+  import { requireAuth, formatBRL, formatDate } from "../js/auth.js";
   import { renderLayout } from "../js/layout.js";
-  import { collection, query, where, orderBy, limit, getDocs }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getLancamentos } from "../js/api.js";
 
   renderLayout("dashboard");
+  await requireAuth();
 
-  const { user, profile } = await requireAuth();
-  const db = getDB();
-
-  // Populate month/year selectors
   const now = new Date();
   let selMes = now.getMonth() + 1;
   let selAno = now.getFullYear();
@@ -105,17 +98,17 @@
 
   let chartBarras, chartPizza;
 
-  async function loadDashboard() {
-    const start = `${selAno}-${String(selMes).padStart(2,"0")}-01`;
-    const end   = `${selAno}-${String(selMes).padStart(2,"0")}-31`;
+  function filterByMonth(docs, mes, ano) {
+    return docs.filter(d => {
+      const m = d.mes || (d.data ? parseInt(d.data.split("-")[1], 10) : 0);
+      const y = d.ano || (d.data ? parseInt(d.data.split("-")[0], 10) : 0);
+      return m === mes && y === ano;
+    });
+  }
 
-    const snap = await getDocs(query(
-      collection(db, "lancamentos"),
-      where("data", ">=", start),
-      where("data", "<=", end),
-      orderBy("data", "desc")
-    ));
-    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  function loadDashboard() {
+    const all = getLancamentos();
+    const docs = filterByMonth(all, selMes, selAno);
 
     let totalR = 0, totalD = 0, cntR = 0, cntD = 0;
     const catMap = {};
@@ -135,7 +128,6 @@
     document.getElementById("kpi-saldo-status").textContent = saldo >= 0 ? "✅ Superávit" : "⚠️ Déficit";
     document.getElementById("kpi-total").textContent = docs.length;
 
-    // Recent table
     const tbody = document.getElementById("tbody-recentes");
     const recent = docs.slice(0, 10);
     if (recent.length === 0) {
@@ -151,14 +143,11 @@
         </tr>`).join("");
     }
 
-    // Bar chart — 12 months
-    await loadBarChart();
+    loadBarChart(all);
 
-    // Pizza — categories
     const labels = Object.keys(catMap);
     const values = Object.values(catMap);
     const colors = ["#1e7a4a","#b83232","#b8962e","#1a2744","#4a7fc1","#7a4ab8","#b87a4a","#4ab8a0","#b84a7a","#6b7394","#a0b84a","#4a9ab8"];
-
     if (chartPizza) chartPizza.destroy();
     chartPizza = new Chart(document.getElementById("chart-pizza"), {
       type: "doughnut",
@@ -167,7 +156,7 @@
     });
   }
 
-  async function loadBarChart() {
+  function loadBarChart(all) {
     const months = [];
     const receitas = [];
     const despesas = [];
@@ -176,15 +165,12 @@
       const m = d.getMonth() + 1;
       const y = d.getFullYear();
       months.push(meses[m-1].slice(0,3) + "/" + String(y).slice(2));
-      const start = `${y}-${String(m).padStart(2,"0")}-01`;
-      const end   = `${y}-${String(m).padStart(2,"0")}-31`;
-      const snap = await getDocs(query(collection(db,"lancamentos"), where("data",">=",start), where("data","<=",end)));
+      const docs = filterByMonth(all, m, y);
       let r = 0, de = 0;
-      snap.docs.forEach(d => { if (d.data().tipo === "receita") r += d.data().valor; else de += d.data().valor; });
+      docs.forEach(x => { if (x.tipo === "receita") r += x.valor; else de += x.valor; });
       receitas.push(r);
       despesas.push(de);
     }
-
     if (chartBarras) chartBarras.destroy();
     chartBarras = new Chart(document.getElementById("chart-barras"), {
       type: "bar",

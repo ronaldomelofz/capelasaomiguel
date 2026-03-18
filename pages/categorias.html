@@ -64,11 +64,10 @@
 </div>
 
 <script type="module">
-  import { requireAuth, isAdmin, getDB } from "../js/auth.js";
+  import { requireAuth, isAdmin } from "../js/auth.js";
   import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA } from "../js/config.js";
   import { renderLayout } from "../js/layout.js";
-  import { collection, getDocs, addDoc, deleteDoc, doc, query, where }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getCategoriasCustom, addCategoria, deleteCategoria } from "../js/api.js";
 
   renderLayout("categorias");
   const { user, profile } = await requireAuth();
@@ -78,12 +77,8 @@
     throw new Error("Acesso negado");
   }
 
-  const db = getDB();
-
-  async function loadCategories() {
-    const snap = await getDocs(collection(db, "categorias"));
-    const custom = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
+  function loadCategories() {
+    const custom = getCategoriasCustom();
     renderList("receita", CATEGORIAS_RECEITA, custom.filter(c => c.tipo === "receita"));
     renderList("despesa", CATEGORIAS_DESPESA, custom.filter(c => c.tipo === "despesa"));
   }
@@ -123,29 +118,25 @@
 
   window.closeModal = id => document.getElementById(id).classList.remove("open");
 
-  window.salvarCategoria = async function() {
+  window.salvarCategoria = function() {
     const nome = document.getElementById("cat-nome").value.trim();
     const tipo = document.getElementById("cat-tipo").value;
     if (!nome) { alert("Digite o nome da categoria."); return; }
-    try {
-      await addDoc(collection(db, "categorias"), { nome, tipo, criadoEm: new Date(), criadoPor: user.uid });
-      closeModal("modal-add-cat");
-      const al = document.getElementById("cat-alert");
-      al.textContent = "✅ Categoria adicionada!"; al.className = "alert alert-success";
-      setTimeout(() => { al.className = "alert hidden"; }, 3000);
-      await loadCategories();
-    } catch(e) { alert("Erro: " + e.message); }
+    addCategoria({ nome, tipo, criadoEm: new Date().toISOString(), criadoPor: user.uid });
+    closeModal("modal-add-cat");
+    const al = document.getElementById("cat-alert");
+    al.textContent = "✅ Categoria adicionada!"; al.className = "alert alert-success";
+    setTimeout(() => { al.className = "alert hidden"; }, 3000);
+    loadCategories();
   };
 
-  window.excluirCategoria = async function(id) {
+  window.excluirCategoria = function(id) {
     if (!confirm("Excluir esta categoria?")) return;
-    try {
-      await deleteDoc(doc(db, "categorias", id));
-      const al = document.getElementById("cat-alert");
-      al.textContent = "✅ Categoria excluída!"; al.className = "alert alert-success";
-      setTimeout(() => { al.className = "alert hidden"; }, 3000);
-      await loadCategories();
-    } catch(e) { alert("Erro: " + e.message); }
+    deleteCategoria(id);
+    const al = document.getElementById("cat-alert");
+    al.textContent = "✅ Categoria excluída!"; al.className = "alert alert-success";
+    setTimeout(() => { al.className = "alert hidden"; }, 3000);
+    loadCategories();
   };
 
   loadCategories();

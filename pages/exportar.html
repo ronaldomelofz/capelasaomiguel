@@ -81,14 +81,12 @@
 </div>
 
 <script type="module">
-  import { requireAuth, getDB, formatBRL, formatDate } from "../js/auth.js";
+  import { requireAuth, formatBRL, formatDate } from "../js/auth.js";
   import { renderLayout } from "../js/layout.js";
-  import { collection, query, where, orderBy, getDocs }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getLancamentos } from "../js/api.js";
 
   renderLayout("exportar");
   await requireAuth();
-  const db = getDB();
 
   const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const now = new Date();
@@ -104,30 +102,17 @@
 
   let dados = [];
 
-  async function fetchDados() {
+  function fetchDados() {
     const tipo = document.getElementById("exp-tipo").value;
     const mes  = document.getElementById("exp-mes").value;
     const ano  = document.getElementById("exp-ano").value;
 
-    let q = collection(db, "lancamentos");
-    const constraints = [orderBy("data", "desc")];
-    if (tipo) constraints.unshift(where("tipo", "==", tipo));
-    if (mes)  constraints.unshift(where("mes", "==", +mes));
-    if (ano)  constraints.unshift(where("ano", "==", +ano));
-
-    try {
-      const snap = await getDocs(query(q, ...constraints));
-      dados = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch(e) {
-      // Firestore may need index — fallback: fetch all and filter
-      const snap = await getDocs(query(collection(db,"lancamentos"), orderBy("data","desc")));
-      dados = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => {
-        if (tipo && d.tipo !== tipo) return false;
-        if (mes && d.mes !== +mes) return false;
-        if (ano && d.ano !== +ano) return false;
-        return true;
-      });
-    }
+    dados = getLancamentos().filter(d => {
+      if (tipo && d.tipo !== tipo) return false;
+      if (mes && d.mes !== +mes) return false;
+      if (ano && d.ano !== +ano) return false;
+      return true;
+    });
 
     // Preview
     let r = 0, de = 0;
@@ -154,9 +139,9 @@
     return dados;
   }
 
-  window.exportarExcel = async function() {
+  window.exportarExcel = function() {
     setStatus("Preparando Excel...", "info");
-    await fetchDados();
+    fetchDados();
 
     const rows = dados.map(d => ({
       Data: formatDate(d.data),
@@ -194,9 +179,9 @@
     setStatus("✅ Excel exportado com sucesso!", "success");
   };
 
-  window.exportarPDF = async function() {
+  window.exportarPDF = function() {
     setStatus("Gerando PDF...", "info");
-    await fetchDados();
+    fetchDados();
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: "landscape", format: "a4" });
@@ -247,8 +232,8 @@
     setStatus("✅ PDF exportado com sucesso!", "success");
   };
 
-  window.imprimirRelatorio = async function() {
-    await fetchDados();
+  window.imprimirRelatorio = function() {
+    fetchDados();
     window.print();
   };
 

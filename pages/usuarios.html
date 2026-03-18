@@ -28,7 +28,7 @@
       <span class="card-title">Cadastro de Usuários</span>
       <button class="btn btn-success" onclick="openModal('modal-novo-user')">+ Novo Usuário</button>
     </div>
-    <p class="text-muted mb-2" style="font-size:.9rem;">Gerencie os usuários do sistema com nome, CPF, endereço, e-mail e credenciais de acesso. A recuperação de senha é enviada ao e-mail cadastrado.</p>
+    <p class="text-muted mb-2" style="font-size:.9rem;">Gerencie os usuários do sistema com nome, CPF, endereço, e-mail e credenciais de acesso.</p>
     <div class="table-wrapper">
       <table>
         <thead>
@@ -46,7 +46,7 @@
 <div class="modal-overlay" id="modal-novo-user">
   <div class="modal" style="max-width:520px;">
     <div class="modal-header">
-      <h3 id="modal-user-title">Novo Usuário</h3>
+      <h3>Novo Usuário</h3>
       <button class="modal-close" onclick="closeModal('modal-novo-user')">×</button>
     </div>
     <div class="modal-body">
@@ -56,17 +56,16 @@
         <input type="text" id="u-nome" placeholder="Nome completo" />
       </div>
       <div class="form-group">
-        <label>CPF *</label>
+        <label>CPF</label>
         <input type="text" id="u-cpf" placeholder="000.000.000-00" maxlength="14" />
       </div>
       <div class="form-group">
-        <label>Endereço *</label>
+        <label>Endereço</label>
         <input type="text" id="u-endereco" placeholder="Rua, número, bairro, cidade" />
       </div>
       <div class="form-group">
         <label>E-mail *</label>
         <input type="email" id="u-email" placeholder="email@exemplo.com" />
-        <small class="text-muted">Usado para login e recuperação de senha</small>
       </div>
       <div class="form-group">
         <label>Usuário de acesso</label>
@@ -119,11 +118,14 @@
       <div class="form-group">
         <label>E-mail</label>
         <input type="email" id="eu-email" readonly style="background:#f5f6f8;cursor:not-allowed;" />
-        <small class="text-muted">E-mail não pode ser alterado. Usado para login e recuperação de senha.</small>
       </div>
       <div class="form-group">
         <label>Usuário de acesso</label>
         <input type="text" id="eu-usuario" placeholder="Nome de usuário (opcional)" />
+      </div>
+      <div class="form-group">
+        <label>Nova senha (deixe em branco para manter)</label>
+        <input type="password" id="eu-senha" placeholder="Nova senha" />
       </div>
       <div class="form-group">
         <label>Perfil</label>
@@ -136,12 +138,6 @@
         <label>Observações</label>
         <input type="text" id="eu-obs" />
       </div>
-      <div class="form-group">
-        <button type="button" class="btn btn-outline btn-sm" onclick="enviarRecuperacaoSenha()" id="btn-recuperar-senha">
-          📧 Enviar e-mail de recuperação de senha
-        </button>
-        <small class="text-muted" style="display:block;margin-top:.25rem">Envia link de redefinição para o e-mail cadastrado</small>
-      </div>
       <input type="hidden" id="eu-uid" />
     </div>
     <div class="modal-footer">
@@ -152,15 +148,9 @@
 </div>
 
 <script type="module">
-  import { requireAuth, isAdmin, getDB, formatDatetime, getAuthInstance } from "../js/auth.js";
-  import { PERFIS } from "../js/config.js";
-  import { FIREBASE_CONFIG } from "../js/config.js";
+  import { requireAuth, isAdmin, formatDatetime, hashPassword, criarUsuarioLocal } from "../js/auth.js";
   import { renderLayout } from "../js/layout.js";
-  import { collection, getDocs, setDoc, deleteDoc, doc, serverTimestamp }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getUsuarios, saveUsuario, deleteUsuario } from "../js/api.js";
 
   renderLayout("usuarios");
   const { user, profile } = await requireAuth();
@@ -170,19 +160,16 @@
     throw new Error("Acesso negado");
   }
 
-  const db = getDB();
-  const auth = getAuthInstance();
   let users = [];
 
   function formatCPF(v) {
     if (!v) return "";
-    const n = v.replace(/\D/g, "");
-    return n.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4").substring(0, 14);
+    const n = String(v).replace(/\D/g, "");
+    return n.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, (_, a, b, c, d) => a + (b ? "." + b : "") + (c ? "." + c : "") + (d ? "-" + d : "")).substring(0, 14);
   }
 
-  async function loadUsers() {
-    const snap = await getDocs(collection(db, "usuarios"));
-    users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  function loadUsers() {
+    users = getUsuarios();
     renderTable();
   }
 
@@ -207,53 +194,43 @@
       </tr>`).join("");
   }
 
-  window.openModal  = id => document.getElementById(id).classList.add("open");
+  window.openModal = id => document.getElementById(id).classList.add("open");
   window.closeModal = id => document.getElementById(id).classList.remove("open");
 
   window.criarUsuario = async function() {
-    const nome     = document.getElementById("u-nome").value.trim();
-    const cpf      = document.getElementById("u-cpf").value.replace(/\D/g, "");
+    const nome = document.getElementById("u-nome").value.trim();
+    const cpf = document.getElementById("u-cpf").value.replace(/\D/g, "");
     const endereco = document.getElementById("u-endereco").value.trim();
-    const email    = document.getElementById("u-email").value.trim();
-    const usuario  = document.getElementById("u-usuario").value.trim();
-    const senha    = document.getElementById("u-senha").value;
-    const perfil   = document.getElementById("u-perfil").value;
-    const obs      = document.getElementById("u-obs").value.trim();
-    const malert   = document.getElementById("modal-alert");
+    const email = document.getElementById("u-email").value.trim();
+    const usuario = document.getElementById("u-usuario").value.trim();
+    const senha = document.getElementById("u-senha").value;
+    const perfil = document.getElementById("u-perfil").value;
+    const obs = document.getElementById("u-obs").value.trim();
+    const malert = document.getElementById("modal-alert");
 
     malert.className = "alert hidden";
     if (!nome || !email || !senha) {
       malert.textContent = "Preencha nome, e-mail e senha.";
-      malert.className = "alert alert-error"; return;
+      malert.className = "alert alert-error";
+      return;
     }
     if (cpf && cpf.length !== 11) {
       malert.textContent = "CPF deve ter 11 dígitos.";
-      malert.className = "alert alert-error"; return;
+      malert.className = "alert alert-error";
+      return;
     }
     if (senha.length < 6) {
       malert.textContent = "A senha deve ter pelo menos 6 caracteres.";
-      malert.className = "alert alert-error"; return;
+      malert.className = "alert alert-error";
+      return;
     }
 
     const btn = document.getElementById("btn-criar-user");
-    btn.disabled = true; btn.textContent = "Criando...";
+    btn.disabled = true;
+    btn.textContent = "Criando...";
 
     try {
-      const secondaryApp = initializeApp(FIREBASE_CONFIG, "secondary_" + Date.now());
-      const secondaryAuth = getAuth(secondaryApp);
-      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
-      const newUid = cred.user.uid;
-      await secondaryAuth.signOut();
-
-      await setDoc(doc(db, "usuarios", newUid), {
-        nome, email, perfil,
-        cpf: cpf || null,
-        endereco: endereco || null,
-        usuario: usuario || null,
-        observacoes: obs || null,
-        criadoEm: serverTimestamp(), criadoPor: user.uid
-      });
-
+      await criarUsuarioLocal(nome, email, senha, perfil, cpf || null, endereco || null, usuario || null, obs || null);
       closeModal("modal-novo-user");
       setAlert("user-alert", "✅ Usuário criado com sucesso!", "success");
       document.getElementById("u-nome").value = "";
@@ -263,13 +240,13 @@
       document.getElementById("u-usuario").value = "";
       document.getElementById("u-senha").value = "";
       document.getElementById("u-obs").value = "";
-      await loadUsers();
-    } catch(e) {
-      let msg = "Erro ao criar usuário.";
-      if (e.code === "auth/email-already-in-use") msg = "Este e-mail já está em uso.";
-      malert.textContent = msg; malert.className = "alert alert-error";
+      loadUsers();
+    } catch (e) {
+      malert.textContent = e.message || "Erro ao criar usuário.";
+      malert.className = "alert alert-error";
     } finally {
-      btn.disabled = false; btn.textContent = "Criar Usuário";
+      btn.disabled = false;
+      btn.textContent = "Criar Usuário";
     }
   };
 
@@ -284,6 +261,7 @@
     document.getElementById("eu-usuario").value = u.usuario || "";
     document.getElementById("eu-perfil").value = u.perfil || "visualizador";
     document.getElementById("eu-obs").value = u.observacoes || "";
+    document.getElementById("eu-senha").value = "";
     openModal("modal-edit-user");
   };
 
@@ -295,57 +273,43 @@
     const usuario = document.getElementById("eu-usuario").value.trim();
     const perfil = document.getElementById("eu-perfil").value;
     const obs = document.getElementById("eu-obs").value.trim();
+    const novaSenha = document.getElementById("eu-senha").value;
     const editAlert = document.getElementById("edit-alert");
     editAlert.className = "alert hidden";
     if (cpf && cpf.length !== 11) {
       editAlert.textContent = "CPF deve ter 11 dígitos.";
-      editAlert.className = "alert alert-error"; return;
+      editAlert.className = "alert alert-error";
+      return;
     }
     try {
-      await setDoc(doc(db, "usuarios", uid), {
-        nome, perfil, endereco: endereco || null, usuario: usuario || null,
-        cpf: cpf || null, observacoes: obs || null
-      }, { merge: true });
+      const update = { nome, perfil, endereco: endereco || null, usuario: usuario || null, cpf: cpf || null, observacoes: obs || null };
+      if (novaSenha && novaSenha.length >= 6) {
+        update.senhaHash = await hashPassword(novaSenha);
+      }
+      saveUsuario(uid, update);
       closeModal("modal-edit-user");
       setAlert("user-alert", "✅ Usuário atualizado!", "success");
-      await loadUsers();
-    } catch(e) { alert("Erro: " + e.message); }
-  };
-
-  window.enviarRecuperacaoSenha = async function() {
-    const email = document.getElementById("eu-email").value.trim();
-    if (!email) { alert("E-mail não informado."); return; }
-    const btn = document.getElementById("btn-recuperar-senha");
-    btn.disabled = true; btn.textContent = "Enviando...";
-    try {
-      await sendPasswordResetEmail(auth, email);
-      setAlert("edit-alert", "✅ E-mail de recuperação enviado! Verifique a caixa de entrada.", "success");
-      document.getElementById("edit-alert").classList.remove("hidden");
-    } catch(e) {
-      document.getElementById("edit-alert").textContent = "Erro: " + (e.code === "auth/user-not-found" ? "E-mail não encontrado no sistema." : e.message);
-      document.getElementById("edit-alert").className = "alert alert-error";
-    } finally {
-      btn.disabled = false; btn.textContent = "📧 Enviar e-mail de recuperação de senha";
+      loadUsers();
+    } catch (e) {
+      alert("Erro: " + e.message);
     }
   };
 
-  window.excluirUser = async function(uid) {
+  window.excluirUser = function(uid) {
     if (uid === user.uid) { alert("Você não pode excluir sua própria conta."); return; }
     if (!confirm("Excluir este usuário? O acesso será removido.")) return;
-    try {
-      await deleteDoc(doc(db, "usuarios", uid));
-      setAlert("user-alert", "✅ Usuário removido.", "success");
-      await loadUsers();
-    } catch(e) { alert("Erro: " + e.message); }
+    deleteUsuario(uid);
+    setAlert("user-alert", "✅ Usuário removido.", "success");
+    loadUsers();
   };
 
   function setAlert(id, msg, type) {
     const el = document.getElementById(id);
-    el.textContent = msg; el.className = `alert alert-${type}`;
+    el.textContent = msg;
+    el.className = `alert alert-${type}`;
     setTimeout(() => { el.className = "alert hidden"; }, 5000);
   }
 
-  // Máscara CPF
   ["u-cpf", "eu-cpf"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("input", (e) => {

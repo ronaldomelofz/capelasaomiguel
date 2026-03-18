@@ -58,10 +58,9 @@
 </div>
 
 <script type="module">
-  import { requireAuth, isAdmin, getDB, formatBRL, formatDate, formatDatetime } from "../js/auth.js";
+  import { requireAuth, isAdmin, formatBRL, formatDate, formatDatetime } from "../js/auth.js";
   import { renderLayout } from "../js/layout.js";
-  import { collection, query, orderBy, getDocs }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getLancamentos } from "../js/api.js";
 
   renderLayout("auditoria");
   const { user, profile } = await requireAuth();
@@ -71,13 +70,11 @@
     throw new Error("Acesso negado");
   }
 
-  const db = getDB();
   let allDocs = [], filtered = [], currentPage = 1;
   const PAGE_SIZE = 30;
 
-  async function load() {
-    const snap = await getDocs(query(collection(db,"lancamentos"), orderBy("criadoEm","desc")));
-    allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  function load() {
+    allDocs = getLancamentos().sort((a, b) => (b.criadoEm || "").localeCompare(a.criadoEm || ""));
 
     // Populate user filter
     const users = [...new Set(allDocs.map(d => d.criadoPorEmail).filter(Boolean))];
