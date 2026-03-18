@@ -19,13 +19,15 @@ O Livro Razão usa **Supabase** como banco de dados — PostgreSQL open-source, 
 ## 3. Configurar credenciais no projeto
 
 1. No Supabase: **Settings** > **API**
-2. Copie **Project URL** e **anon public** key
+2. Copie **Project URL** e a chave **anon public** (ou **publishable**)
 3. No projeto, edite `js/supabase-config.js`:
 
 ```javascript
-export const SUPABASE_URL = "https://xxx.supabase.co";  // sua URL
-export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIs...";  // sua chave anon
+export const SUPABASE_URL = "https://xxx.supabase.co";  // sua URL exata
+export const SUPABASE_ANON_KEY = "sua_chave_anon_ou_publishable";
 ```
+
+Se o login falhar, use a chave **anon** (formato JWT, começa com `eyJ...`) em vez da publishable.
 
 ## 4. Primeiro acesso
 
