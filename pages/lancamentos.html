@@ -296,9 +296,10 @@
 
     loadAll();
     const authResult = await requireAuth();
-    if (!authResult) return;
-    admin = isAdmin(authResult.profile);
-    applyFilters();
+    if (authResult) {
+      admin = isAdmin(authResult.profile);
+      applyFilters();
+    }
 
   window.goPage = function(p) { currentPage = p; renderPage(); };
 
