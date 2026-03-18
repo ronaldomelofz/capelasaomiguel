@@ -14,6 +14,16 @@ export const FIREBASE_CONFIG = {
 };
 
 // ============================================================
+//  USUÁRIO ADMINISTRADOR PADRÃO
+//  Criar no Firebase Console: Authentication > Users > Add user
+//  E-mail: admin@capelasaomiguel.com | Senha: admin
+// ============================================================
+export const ADMIN_DEFAULT = {
+  email: "admin@capelasaomiguel.com",
+  usernames: ["admin", "administrador"]  // Aceita admin ou administrador no login
+};
+
+// ============================================================
 //  CATEGORIAS DE RECEITAS
 // ============================================================
 export const CATEGORIAS_RECEITA = [

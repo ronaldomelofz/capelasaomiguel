@@ -23,8 +23,8 @@
       <div id="login-error" class="alert alert-error hidden"></div>
 
       <div class="form-group">
-        <label for="email">E-mail</label>
-        <input type="email" id="email" placeholder="seu@email.com" autocomplete="email" />
+        <label for="email">E-mail ou usuário</label>
+        <input type="text" id="email" placeholder="admin ou seu@email.com" autocomplete="username" />
       </div>
 
       <div class="form-group">
@@ -44,6 +44,7 @@
 
     <div class="login-footer">
       <small>Sistema seguro com Firebase Authentication</small>
+      <small style="display:block;margin-top:.5rem;opacity:.8">Admin padrão: <strong>admin</strong> / <strong>admin</strong></small>
     </div>
   </div>
 
@@ -52,7 +53,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { FIREBASE_CONFIG } from "./js/config.js";
+    import { FIREBASE_CONFIG, ADMIN_DEFAULT } from "./js/config.js";
 
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
@@ -62,8 +63,16 @@
       if (user) window.location.href = "pages/dashboard.html";
     });
 
+    function getLoginEmail(input) {
+      const val = input.trim().toLowerCase();
+      const aliases = ADMIN_DEFAULT.usernames || [ADMIN_DEFAULT.username];
+      if (aliases.some(a => val === String(a).toLowerCase())) return ADMIN_DEFAULT.email;
+      return input.trim();
+    }
+
     window.doLogin = async function() {
-      const email = document.getElementById("email").value.trim();
+      const loginInput = document.getElementById("email").value.trim();
+      const email = getLoginEmail(loginInput);
       const password = document.getElementById("password").value;
       const err = document.getElementById("login-error");
       const btnText = document.getElementById("btn-login-text");
@@ -78,10 +87,17 @@
         window.location.href = "pages/dashboard.html";
       } catch (e) {
         let msg = "Erro ao fazer login.";
-        if (e.code === "auth/user-not-found" || e.code === "auth/wrong-password" || e.code === "auth/invalid-credential")
-          msg = "E-mail ou senha inválidos.";
-        else if (e.code === "auth/too-many-requests")
+        const code = e.code || "";
+        if (code === "auth/user-not-found" || code === "auth/invalid-credential")
+          msg = "Usuário não encontrado. Crie o admin no Firebase Console (Authentication > Add user) com e-mail " + (ADMIN_DEFAULT.email || "admin@capelasaomiguel.com") + " e senha admin.";
+        else if (code === "auth/wrong-password")
+          msg = "Senha incorreta. Use 'admin' para o usuário padrão.";
+        else if (code === "auth/too-many-requests")
           msg = "Muitas tentativas. Aguarde um momento.";
+        else if (code === "auth/invalid-api-key" || code === "auth/configuration-not-found" || code === "auth/project-not-found")
+          msg = "Firebase não configurado. Configure as variáveis de ambiente no Netlify (FIREBASE_API_KEY, FIREBASE_PROJECT_ID, etc.).";
+        else if (code.startsWith("auth/"))
+          msg = "Erro de autenticação: " + (e.message || code);
         err.textContent = msg;
         err.classList.remove("hidden");
       } finally {
@@ -91,8 +107,9 @@
     };
 
     window.doPasswordReset = async function() {
-      const email = document.getElementById("email").value.trim();
-      if (!email) { alert("Digite seu e-mail primeiro."); return; }
+      const loginInput = document.getElementById("email").value.trim();
+      const email = getLoginEmail(loginInput);
+      if (!loginInput) { alert("Digite seu e-mail ou usuário primeiro."); return; }
       try {
         await sendPasswordResetEmail(auth, email);
         alert("E-mail de recuperação enviado!");

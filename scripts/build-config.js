@@ -19,9 +19,15 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID || "SEU_APP_ID"
 };
 
+const adminDefault = {
+  email: process.env.ADMIN_EMAIL || "admin@capelasaomiguel.com",
+  usernames: (process.env.ADMIN_USERNAMES || "admin,administrador").split(",").map(s => s.trim())
+};
+
 const configStr = JSON.stringify(firebaseConfig, null, 2);
-const regex = /export const FIREBASE_CONFIG = \{[\s\S]*?\};/;
-content = content.replace(regex, `export const FIREBASE_CONFIG = ${configStr};`);
+const adminStr = JSON.stringify(adminDefault, null, 2);
+content = content.replace(/export const FIREBASE_CONFIG = \{[\s\S]*?\};/, `export const FIREBASE_CONFIG = ${configStr};`);
+content = content.replace(/export const ADMIN_DEFAULT = \{[\s\S]*?\};/, `export const ADMIN_DEFAULT = ${adminStr};`);
 
 fs.writeFileSync(configPath, content);
 console.log('✅ config.js atualizado com credenciais Firebase');

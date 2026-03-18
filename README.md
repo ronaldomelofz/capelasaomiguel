@@ -85,19 +85,22 @@ export const FIREBASE_CONFIG = {
 
 ### 8. Criar o primeiro usuário Administrador
 
-Como o sistema não tem tela de registro pública, siga estes passos:
+O sistema possui usuário padrão **admin** / **admin**. Para configurá-lo:
 
 1. No Firebase Console → **Authentication** → **Usuários** → **Adicionar usuário**
-2. Informe e-mail e senha do administrador principal
-3. Copie o **User UID** gerado
-4. Vá em **Firestore** → **Dados** → Coleção `usuarios` → Adicionar documento
-5. Use o **UID** como ID do documento
-6. Adicione os campos:
+2. E-mail: `admin@capelasaomiguel.com` (ou o definido em `js/config.js` → `ADMIN_DEFAULT`)
+3. Senha: `admin`
+4. Copie o **User UID** gerado
+5. Vá em **Firestore** → **Dados** → Coleção `usuarios` → Adicionar documento
+6. Use o **UID** como ID do documento
+7. Adicione os campos:
    ```
-   nome:   "Nome do Administrador"
-   email:  "admin@paroquia.com"
+   nome:   "Administrador"
+   email:  "admin@capelasaomiguel.com"
    perfil: "admin"
    ```
+
+Após isso, faça login com **admin** (ou o e-mail) e senha **admin**.
 
 ---
 

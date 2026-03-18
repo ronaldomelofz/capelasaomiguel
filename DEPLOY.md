@@ -2,9 +2,9 @@
 
 ## ✅ Status do Deploy
 
-- **Site em produção:** https://livro-razao-capelasaomiguel.netlify.app
+- **Site em produção:** https://capelasaomiguel.netlify.app
 - **Repositório GitHub:** https://github.com/ronaldomelofz/capelasaomiguel
-- **Painel Netlify:** https://app.netlify.com/projects/livro-razao-capelasaomiguel
+- **Painel Netlify:** https://app.netlify.com/projects/capelasaomiguel
 
 ---
 
@@ -12,7 +12,7 @@
 
 Para que cada `git push` dispare um novo deploy automaticamente:
 
-1. Acesse [Netlify → livro-razao-capelasaomiguel → Site settings](https://app.netlify.com/projects/livro-razao-capelasaomiguel/configuration)
+1. Acesse [Netlify → capelasaomiguel → Site settings](https://app.netlify.com/projects/capelasaomiguel/configuration)
 2. Em **Build & deploy** → **Continuous deployment** → **Link repository**
 3. Conecte ao GitHub e selecione `ronaldomelofz/capelasaomiguel`
 4. Configurações (já no `netlify.toml`):
