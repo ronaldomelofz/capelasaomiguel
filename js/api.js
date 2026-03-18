@@ -111,7 +111,9 @@ async function req(method, path, body) {
 function loadLocal(k) {
   try {
     const d = localStorage.getItem(k);
-    return d ? JSON.parse(d) : [];
+    if (!d) return [];
+    const parsed = JSON.parse(d);
+    return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 }
 
@@ -251,12 +253,16 @@ export async function addLancamento(obj) {
     const inserted = Array.isArray(data) ? data[0] : data;
     return inserted ? toLancamento(inserted) : item;
   } catch (e) {
-    const list = loadLocal(KEY_LANCAMENTOS);
-    list.unshift(item);
-    saveLocal(KEY_LANCAMENTOS, list);
-    const pending = loadPendingLancamentos();
-    pending.unshift(item);
-    savePendingLancamentos(pending);
+    try {
+      const list = loadLocal(KEY_LANCAMENTOS);
+      list.unshift(item);
+      saveLocal(KEY_LANCAMENTOS, list);
+      const pending = loadPendingLancamentos();
+      pending.unshift(item);
+      savePendingLancamentos(pending);
+    } catch (localErr) {
+      console.error("Fallback localStorage falhou:", localErr);
+    }
     return item;
   }
 }

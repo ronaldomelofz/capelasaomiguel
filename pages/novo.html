@@ -70,7 +70,7 @@
   import { requireAuth, isAdmin } from "../js/auth.js";
   import { renderLayout } from "../js/layout.js";
   import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA, FORMAS_PAGAMENTO_PADRAO } from "../js/config.js";
-  import { addLancamento, getCategoriasCustom, getFormasPagamentoCustom } from "../js/api.js";
+  import { addLancamento, getCategoriasCustom, getFormasPagamentoCustom, getConnectionStatus } from "../js/api.js";
 
   renderLayout("novo");
   const { user, profile } = await requireAuth();
@@ -167,8 +167,11 @@
         mes: parseInt(m, 10),
         ano: parseInt(y, 10)
       });
-      alertEl.textContent = "✅ Lançamento salvo com sucesso!";
-    alertEl.className = "alert alert-success";
+      const offline = getConnectionStatus() === "offline";
+      alertEl.textContent = offline
+        ? "✅ Salvo localmente! Será sincronizado quando a conexão estiver disponível."
+        : "✅ Lançamento salvo com sucesso!";
+      alertEl.className = "alert alert-success";
     document.getElementById("data").value = new Date().toISOString().split("T")[0];
     document.getElementById("valor").value = "";
     document.getElementById("categoria").value = "";
