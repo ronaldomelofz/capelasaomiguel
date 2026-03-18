@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Exportar — Livro Razão</title>
+  <title>Exportar — Capela São Miguel Arcanjo</title>
   <link rel="stylesheet" href="../css/main.css" />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
   <!-- SheetJS for Excel -->
@@ -43,8 +43,8 @@
       </div>
 
       <div class="form-group">
-        <label>Paróquia / Identificação (para cabeçalho do PDF)</label>
-        <input type="text" id="exp-nome-paroquia" placeholder="Ex: Paróquia Nossa Senhora Aparecida" />
+        <label>Identificação (para cabeçalho do PDF)</label>
+        <input type="text" id="exp-nome-paroquia" placeholder="Ex: Capela São Miguel Arcanjo" />
       </div>
 
       <div id="exp-status" class="alert hidden"></div>
@@ -198,7 +198,7 @@
 
     // Header
     doc.setFontSize(16); doc.setFont("helvetica","bold");
-    doc.text("✝ Livro Razão — " + paroquia, 14, 18);
+    doc.text("✝ Capela São Miguel Arcanjo — " + paroquia, 14, 18);
     doc.setFontSize(10); doc.setFont("helvetica","normal");
     doc.text(`Período: ${periodo}`, 14, 25);
     doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, 31);

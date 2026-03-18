@@ -33,7 +33,7 @@ export function renderLayout(activeItem) {
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <div><span class="cross">✝</span><span class="brand-name">Financeiro</span></div>
-      <div class="brand-sub">Gestão Financeira da Paróquia</div>
+      <div class="brand-sub">Gestão Financeira da Capela São Miguel Arcanjo</div>
     </div>
     <div class="sidebar-user">
       <div class="user-name" id="nav-username">—</div>
