@@ -102,6 +102,9 @@
 
   let dados = [];
 
+  function getMes(d) { return d.mes ?? (d.data ? parseInt(d.data.split("-")[1], 10) : 0); }
+  function getAno(d) { return d.ano ?? (d.data ? parseInt(d.data.split("-")[0], 10) : 0); }
+
   async function fetchDados() {
     const tipo = document.getElementById("exp-tipo").value;
     const mes  = document.getElementById("exp-mes").value;
@@ -111,8 +114,8 @@
     try { all = await getLancamentos(); } catch (e) { console.error(e); }
     dados = all.filter(d => {
       if (tipo && d.tipo !== tipo) return false;
-      if (mes && d.mes !== +mes) return false;
-      if (ano && d.ano !== +ano) return false;
+      if (mes && getMes(d) !== +mes) return false;
+      if (ano && getAno(d) !== +ano) return false;
       return true;
     });
 

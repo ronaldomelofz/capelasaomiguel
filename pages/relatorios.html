@@ -72,16 +72,15 @@
 
   async function fetchPeriod(mes, ano) {
     const all = await getLancamentos();
-    return all.filter(d => {
-      const m = d.mes || (d.data ? parseInt(d.data.split("-")[1], 10) : 0);
-      const y = d.ano || (d.data ? parseInt(d.data.split("-")[0], 10) : 0);
-      return m === mes && y === ano;
-    });
+    return all.filter(d => getMes(d) === mes && getAno(d) === ano);
   }
+
+  function getMes(d) { return d.mes ?? (d.data ? parseInt(d.data.split("-")[1], 10) : 0); }
+  function getAno(d) { return d.ano ?? (d.data ? parseInt(d.data.split("-")[0], 10) : 0); }
 
   async function fetchYear(ano) {
     const all = await getLancamentos();
-    return all.filter(d => (d.ano || (d.data ? parseInt(d.data.split("-")[0], 10) : 0)) === ano);
+    return all.filter(d => getAno(d) === ano);
   }
 
   window.renderReport = async function() {
@@ -151,10 +150,11 @@
     const byMonth = {};
     for (let m = 1; m <= 12; m++) byMonth[m] = { receita: 0, despesa: 0, count: 0 };
     docs.forEach(d => {
-      if (byMonth[d.mes]) {
-        if (d.tipo === "receita") byMonth[d.mes].receita += d.valor;
-        else byMonth[d.mes].despesa += d.valor;
-        byMonth[d.mes].count++;
+      const m = getMes(d);
+      if (m >= 1 && m <= 12) {
+        if (d.tipo === "receita") byMonth[m].receita += d.valor;
+        else byMonth[m].despesa += d.valor;
+        byMonth[m].count++;
       }
     });
     const { receita, despesa, saldo } = sumStats(docs);
@@ -265,10 +265,12 @@
   }
 
   function renderComparativo(docs, ano, cont) {
-    // Group by month
     const byMonth = {};
     for (let m = 1; m <= 12; m++) byMonth[m] = [];
-    docs.forEach(d => { if (byMonth[d.mes]) byMonth[d.mes].push(d); });
+    docs.forEach(d => {
+      const m = getMes(d);
+      if (m >= 1 && m <= 12) byMonth[m].push(d);
+    });
 
     const rows = Object.entries(byMonth).map(([m, ds]) => {
       const { receita, despesa, saldo } = sumStats(ds);
