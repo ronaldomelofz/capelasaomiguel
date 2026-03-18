@@ -1,5 +1,27 @@
 # 🚀 Guia de Deploy - Livro Razão
 
+## ✅ Status do Deploy
+
+- **Site em produção:** https://livro-razao-capelasaomiguel.netlify.app
+- **Repositório GitHub:** https://github.com/ronaldomelofz/capelasaomiguel
+- **Painel Netlify:** https://app.netlify.com/projects/livro-razao-capelasaomiguel
+
+---
+
+## Conectar GitHub para Deploy Automático
+
+Para que cada `git push` dispare um novo deploy automaticamente:
+
+1. Acesse [Netlify → livro-razao-capelasaomiguel → Site settings](https://app.netlify.com/projects/livro-razao-capelasaomiguel/configuration)
+2. Em **Build & deploy** → **Continuous deployment** → **Link repository**
+3. Conecte ao GitHub e selecione `ronaldomelofz/capelasaomiguel`
+4. Configurações (já no `netlify.toml`):
+   - Build command: `node scripts/build-config.js`
+   - Publish directory: `.`
+   - Branch: `main`
+
+---
+
 ## Configuração Rápida (Netlify + GitHub)
 
 ### 1. Variáveis de Ambiente no Netlify
