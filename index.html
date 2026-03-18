@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Capela São Miguel Arcanjo</title>
   <link rel="stylesheet" href="css/main.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -12,9 +12,13 @@
 
   <div class="login-container">
     <div class="login-brand">
-      <div class="login-cross">✝</div>
-      <h1>Capela São Miguel Arcanjo</h1>
-      <p>Gestão Financeira da Capela São Miguel Arcanjo</p>
+      <div class="login-brand-inner">
+        <img src="capelasaomiguelarcanjo.png" alt="Capela São Miguel Arcanjo" class="login-logo" />
+        <div class="login-brand-text">
+          <h1>Capela São Miguel Arcanjo</h1>
+          <p>Gestão Financeira da Capela São Miguel Arcanjo</p>
+        </div>
+      </div>
     </div>
 
     <div class="login-card">
@@ -39,12 +43,6 @@
         <span id="btn-login-text">Entrar</span>
         <span id="btn-login-loading" class="hidden">Aguarde...</span>
       </button>
-    </div>
-
-    <div class="login-footer">
-      <small>Dados no banco Supabase</small>
-      <small style="display:block;margin-top:.5rem;opacity:.8">Admin padrão: <strong>admin</strong> / <strong>admin</strong></small>
-      <small style="display:block;margin-top:.5rem;opacity:.7">Dados no banco Supabase</small>
     </div>
   </div>
 
