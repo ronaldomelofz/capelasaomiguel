@@ -1,7 +1,10 @@
 {
   "name": "livro-razao-paroquia",
   "version": "1.0.0",
-  "description": "Sistema de gestão financeira paroquial - Livro Razão (localStorage)",
+  "description": "Sistema de gestão financeira paroquial - Livro Razão (Supabase)",
   "keywords": ["paroquia", "financeiro", "livro-razao"],
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/inject-config.js"
+  }
 }

@@ -6,6 +6,9 @@ node_modules/
 .env.local
 .env.*.local
 
+# Credenciais Supabase — NUNCA commitar
+js/supabase-config.js
+
 # IDE
 .idea/
 .vscode/

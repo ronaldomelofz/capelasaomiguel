@@ -16,18 +16,18 @@ O Livro Razão usa **Supabase** como banco de dados — PostgreSQL open-source, 
 3. Copie todo o conteúdo de `supabase/schema.sql`
 4. Cole e execute (Run)
 
-## 3. Configurar credenciais no projeto
+## 3. Configurar credenciais
 
-1. No Supabase: **Settings** > **API**
-2. Copie **Project URL** e a chave **anon public** (ou **publishable**)
-3. No projeto, edite `js/supabase-config.js`:
+### Netlify (recomendado — credenciais protegidas)
+Em **Site settings** → **Environment variables**, adicione:
+- `SUPABASE_URL` = sua Project URL
+- `SUPABASE_ANON_KEY` = chave anon (JWT)
 
-```javascript
-export const SUPABASE_URL = "https://xxx.supabase.co";  // sua URL exata
-export const SUPABASE_ANON_KEY = "sua_chave_anon_ou_publishable";
+### Desenvolvimento local
+```bash
+cp js/supabase-config.example.js js/supabase-config.js
 ```
-
-Se o login falhar, use a chave **anon** (formato JWT, começa com `eyJ...`) em vez da publishable.
+Edite `js/supabase-config.js` com a URL e chave anon. Este arquivo está no `.gitignore` e não será commitado.
 
 ## 4. Primeiro acesso
 

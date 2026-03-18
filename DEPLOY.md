@@ -13,19 +13,34 @@
 
 ## Configuração obrigatória
 
-Antes do deploy, configure o Supabase:
-
+### Supabase
 1. Crie um projeto em [supabase.com](https://supabase.com)
 2. Execute o SQL em `supabase/schema.sql` no SQL Editor
-3. Edite `js/supabase-config.js` com sua URL e chave anon (Settings > API)
+
+### Netlify (variáveis de ambiente)
+No Netlify: **Site settings** → **Environment variables** → **Add variable**:
+
+| Nome | Valor |
+|------|-------|
+| `SUPABASE_URL` | https://seu-projeto.supabase.co |
+| `SUPABASE_ANON_KEY` | sua chave anon (JWT) |
+
+As credenciais ficam protegidas — não vão para o repositório.
+
+### Desenvolvimento local
+```bash
+cp js/supabase-config.example.js js/supabase-config.js
+# Edite js/supabase-config.js com suas credenciais
+```
 
 ## Deploy
 
 1. `git push` para o GitHub
-2. Netlify faz deploy automático (se conectado)
+2. Netlify faz build e deploy automático (usa as env vars)
 
-Ou manualmente:
+Deploy manual:
 ```bash
+npm run build   # gera config a partir das env vars
 netlify deploy --prod --dir=.
 ```
 
