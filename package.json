@@ -1,8 +1,8 @@
 {
-  "name": "livro-razao-paroquia",
+  "name": "capela-sao-miguel-arcanjo",
   "version": "1.0.0",
-  "description": "Sistema de gestão financeira paroquial - Livro Razão (Supabase)",
-  "keywords": ["paroquia", "financeiro", "livro-razao"],
+  "description": "Sistema de gestão financeira - Capela São Miguel Arcanjo (Supabase)",
+  "keywords": ["capela", "financeiro", "gestão"],
   "license": "MIT",
   "scripts": {
     "build": "node scripts/inject-config.js"

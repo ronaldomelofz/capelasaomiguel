@@ -1,5 +1,5 @@
 -- ============================================================
--- Livro Razão — Schema Supabase (PostgreSQL)
+-- Capela São Miguel Arcanjo — Schema Supabase (PostgreSQL)
 -- Execute no SQL Editor do Supabase: https://supabase.com/dashboard
 -- ============================================================
 

@@ -1,6 +1,6 @@
 # Configuração do Supabase (Banco de Dados)
 
-O Livro Razão usa **Supabase** como banco de dados — PostgreSQL open-source, gratuito e hospedado.
+O sistema usa **Supabase** como banco de dados — PostgreSQL open-source, gratuito e hospedado.
 
 ## 1. Criar projeto no Supabase
 

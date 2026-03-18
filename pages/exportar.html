@@ -44,7 +44,7 @@
 
       <div class="form-group">
         <label>Identificação (para cabeçalho do PDF)</label>
-        <input type="text" id="exp-nome-paroquia" placeholder="Ex: Capela São Miguel Arcanjo" />
+        <input type="text" id="exp-nome-identificacao" placeholder="Ex: Capela São Miguel Arcanjo" />
       </div>
 
       <div id="exp-status" class="alert hidden"></div>
@@ -191,14 +191,14 @@
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: "landscape", format: "a4" });
 
-    const paroquia = document.getElementById("exp-nome-paroquia").value || "Paróquia";
+    const identificacao = document.getElementById("exp-nome-identificacao").value.trim();
     const mes  = document.getElementById("exp-mes").value;
     const ano  = document.getElementById("exp-ano").value;
     const periodo = mes && ano ? `${meses[+mes-1]} / ${ano}` : ano || "Todos os períodos";
 
     // Header
     doc.setFontSize(16); doc.setFont("helvetica","bold");
-    doc.text("✝ Capela São Miguel Arcanjo — " + paroquia, 14, 18);
+    doc.text(identificacao ? "✝ Capela São Miguel Arcanjo — " + identificacao : "✝ Capela São Miguel Arcanjo", 14, 18);
     doc.setFontSize(10); doc.setFont("helvetica","normal");
     doc.text(`Período: ${periodo}`, 14, 25);
     doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, 31);

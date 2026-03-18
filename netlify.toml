@@ -1,4 +1,4 @@
-# Netlify configuration for Livro Razão - Paróquia (Supabase)
+# Netlify configuration for Capela São Miguel Arcanjo (Supabase)
 [build]
   command = "npm run build"
   publish = "."

@@ -1,6 +1,6 @@
-# ✝ Livro Razão — Portal Financeiro da Paróquia
+# ✝ Capela São Miguel Arcanjo — Portal Financeiro
 
-Sistema web de gestão financeira paroquial com **Supabase** (PostgreSQL open-source).  
+Sistema web de gestão financeira com **Supabase** (PostgreSQL open-source).  
 Deploy no **Netlify** + **GitHub**. Funciona como livro razão digital: controle de receitas e despesas com relatórios, gráficos e exportação.
 
 ---
