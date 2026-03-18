@@ -31,11 +31,11 @@
         <label for="password">Senha</label>
         <div class="password-input-wrap">
           <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
-          <button type="button" class="btn-toggle-password" id="btn-toggle-password" onclick="togglePassword()" title="Mostrar/ocultar senha" aria-label="Mostrar senha">👁</button>
+          <button type="button" class="btn-toggle-password" id="btn-toggle-password" title="Mostrar/ocultar senha" aria-label="Mostrar senha">👁</button>
         </div>
       </div>
 
-      <button class="btn btn-primary btn-block" id="btn-login" onclick="doLogin()">
+      <button type="button" class="btn btn-primary btn-block" id="btn-login">
         <span id="btn-login-text">Entrar</span>
         <span id="btn-login-loading" class="hidden">Aguarde...</span>
       </button>
@@ -48,6 +48,20 @@
     </div>
   </div>
 
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      var btnToggle = document.getElementById("btn-toggle-password");
+      var inputPass = document.getElementById("password");
+      if (btnToggle && inputPass) {
+        btnToggle.addEventListener("click", function() {
+          var isPass = inputPass.type === "password";
+          inputPass.type = isPass ? "text" : "password";
+          btnToggle.textContent = isPass ? "🙈" : "👁";
+          btnToggle.setAttribute("aria-label", isPass ? "Ocultar senha" : "Mostrar senha");
+        });
+      }
+    });
+  </script>
   <script type="module">
     import { login } from "./js/auth.js";
 
@@ -58,52 +72,44 @@
       } catch {}
     }
 
-    window.togglePassword = function() {
-      const input = document.getElementById("password");
-      const btn = document.getElementById("btn-toggle-password");
-      const isPass = input.type === "password";
-      input.type = isPass ? "text" : "password";
-      btn.textContent = isPass ? "🙈" : "👁";
-      btn.setAttribute("aria-label", isPass ? "Ocultar senha" : "Mostrar senha");
-    };
+    var btnLogin = document.getElementById("btn-login");
+    var inpPass = document.getElementById("password");
+    if (btnLogin) btnLogin.addEventListener("click", doLogin);
+    if (inpPass) inpPass.addEventListener("keydown", function(e) { if (e.key === "Enter") doLogin(); });
 
-    window.doLogin = async function() {
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
-      const err = document.getElementById("login-error");
-      const btnText = document.getElementById("btn-login-text");
-      const btnLoad = document.getElementById("btn-login-loading");
+    async function doLogin() {
+      var email = document.getElementById("email").value.trim();
+      var password = document.getElementById("password").value;
+      var err = document.getElementById("login-error");
+      var btnText = document.getElementById("btn-login-text");
+      var btnLoad = document.getElementById("btn-login-loading");
 
       err.classList.add("hidden");
-      btnText.classList.add("hidden");
-      btnLoad.classList.remove("hidden");
+      if (btnText) btnText.classList.add("hidden");
+      if (btnLoad) btnLoad.classList.remove("hidden");
 
       if (!email || !password) {
         err.textContent = "Preencha usuário e senha.";
         err.classList.remove("hidden");
-        btnText.classList.remove("hidden");
-        btnLoad.classList.add("hidden");
+        if (btnText) btnText.classList.remove("hidden");
+        if (btnLoad) btnLoad.classList.add("hidden");
         return;
       }
 
       try {
-        const ok = await login(email, password);
+        var ok = await login(email, password);
         if (ok) window.location.href = "pages/dashboard.html";
         else {
           err.textContent = "Usuário ou senha inválidos. Use admin/admin para o primeiro acesso.";
           err.classList.remove("hidden");
         }
       } catch (e) {
-        err.textContent = e.message || "Erro ao conectar. Verifique a configuração do Supabase.";
+        err.textContent = (e && e.message) || "Erro ao conectar. Verifique a configuração do Supabase.";
         err.classList.remove("hidden");
       }
-      btnText.classList.remove("hidden");
-      btnLoad.classList.add("hidden");
-    };
-
-    document.getElementById("password").addEventListener("keydown", e => {
-      if (e.key === "Enter") doLogin();
-    });
+      if (btnText) btnText.classList.remove("hidden");
+      if (btnLoad) btnLoad.classList.add("hidden");
+    }
   </script>
 </body>
 </html>
