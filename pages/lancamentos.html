@@ -88,8 +88,64 @@
     </div>
     <div class="modal-body" id="modal-detalhe-body"></div>
     <div class="modal-footer">
+      <button class="btn btn-primary btn-sm admin-only" id="btn-editar" onclick="abrirEdicao()">✏️ Editar</button>
       <button class="btn btn-danger btn-sm admin-only" id="btn-excluir" onclick="excluirLancamento()">🗑 Excluir</button>
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-detalhe')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="modal-editar">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <h3>Editar Lançamento</h3>
+      <button class="modal-close" onclick="closeModal('modal-editar')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="edit-alert" class="alert hidden"></div>
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select id="edit-tipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group">
+          <label>Data *</label>
+          <input type="date" id="edit-data" />
+        </div>
+        <div class="form-group">
+          <label>Valor (R$) *</label>
+          <input type="text" id="edit-valor" placeholder="0,00" inputmode="decimal" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Categoria *</label>
+        <select id="edit-categoria"></select>
+      </div>
+      <div class="form-group">
+        <label>Descrição *</label>
+        <input type="text" id="edit-descricao" maxlength="200" />
+      </div>
+      <div class="form-group">
+        <label>Responsável</label>
+        <input type="text" id="edit-responsavel" />
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea id="edit-observacoes" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Nº Documento</label>
+        <input type="text" id="edit-numero-doc" />
+      </div>
+      <div class="form-group">
+        <label>Forma de Pagamento</label>
+        <select id="edit-forma-pagto"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-editar')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btn-salvar-edicao" onclick="salvarEdicao()">💾 Salvar</button>
     </div>
   </div>
 </div>
@@ -98,7 +154,8 @@
   import { requireAuth, isAdmin, formatBRL, formatDate, formatDatetime } from "../js/auth.js";
   import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA } from "../js/config.js";
   import { renderLayout } from "../js/layout.js";
-  import { getLancamentos, deleteLancamento, getCategoriasCustom } from "../js/api.js";
+  import { getLancamentos, deleteLancamento, updateLancamento, getCategoriasCustom, getFormasPagamentoCustom } from "../js/api.js";
+  import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA, FORMAS_PAGAMENTO_PADRAO } from "../js/config.js";
 
   renderLayout("lancamentos");
   const { user, profile } = await requireAuth();
@@ -204,6 +261,7 @@
         <td class="text-right val-${d.tipo}">${formatBRL(d.valor)}</td>
         <td class="text-center">
           <button class="btn btn-outline btn-sm" onclick="openDetalhe('${d.id}')">👁 Ver</button>
+          ${admin ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openEdicao('${d.id}')">✏️ Editar</button>` : ""}
         </td>
       </tr>`).join("");
 
@@ -227,7 +285,9 @@
     selectedId = id;
 
     const excluirBtn = document.getElementById("btn-excluir");
+    const editarBtn = document.getElementById("btn-editar");
     if (excluirBtn) excluirBtn.style.display = admin ? "inline-flex" : "none";
+    if (editarBtn) editarBtn.style.display = admin ? "inline-flex" : "none";
 
     document.getElementById("modal-detalhe-body").innerHTML = `
       <div style="display:grid;gap:.75rem;">
@@ -249,6 +309,123 @@
         </div>
       </div>`;
     document.getElementById("modal-detalhe").classList.add("open");
+  };
+
+  async function populateEditFormas() {
+    const sel = document.getElementById("edit-forma-pagto");
+    if (!sel) return;
+    try {
+      const custom = (await getFormasPagamentoCustom()).map(f => f.nome);
+      const formas = [...FORMAS_PAGAMENTO_PADRAO, ...custom];
+      sel.innerHTML = '<option value="">— Selecione —</option>';
+      formas.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
+    } catch (e) {
+      FORMAS_PAGAMENTO_PADRAO.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
+    }
+  }
+
+  async function populateEditCategorias(tipo) {
+    const sel = document.getElementById("edit-categoria");
+    const defaults = tipo === "receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
+    try {
+      const custom = (await getCategoriasCustom()).filter(c => c.tipo === tipo).map(c => c.nome);
+      sel.innerHTML = '<option value="">— Selecione —</option>';
+      [...defaults, ...custom].forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    } catch (e) {
+      sel.innerHTML = '<option value="">— Selecione —</option>';
+      defaults.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    }
+  }
+
+  window.openEdicao = window.abrirEdicao = async function(id) {
+    if (!admin) return;
+    const lid = id || selectedId;
+    if (!lid) return;
+    const d = allDocs.find(x => x.id === lid);
+    if (!d) return;
+    selectedId = lid;
+    closeModal("modal-detalhe");
+
+    await populateEditCategorias(d.tipo);
+    await populateEditFormas();
+
+    document.getElementById("edit-tipo").value = d.tipo;
+    document.getElementById("edit-data").value = d.data || "";
+    document.getElementById("edit-valor").value = d.valor ? Number(d.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+    document.getElementById("edit-categoria").value = d.categoria || "";
+    document.getElementById("edit-descricao").value = d.descricao || "";
+    document.getElementById("edit-responsavel").value = d.responsavel || "";
+    document.getElementById("edit-observacoes").value = d.observacoes || "";
+    document.getElementById("edit-numero-doc").value = d.numeroDocumento || "";
+    document.getElementById("edit-forma-pagto").value = d.formaPagamento || "";
+    document.getElementById("edit-alert").className = "alert hidden";
+    document.getElementById("modal-editar").classList.add("open");
+  };
+
+  document.getElementById("edit-tipo").addEventListener("change", function() {
+    populateEditCategorias(this.value);
+  });
+
+  const editValorEl = document.getElementById("edit-valor");
+  if (editValorEl) {
+    editValorEl.addEventListener("input", function() {
+      let v = this.value.replace(/\D/g, "");
+      if (!v) { this.value = ""; return; }
+      v = (parseInt(v, 10) / 100).toFixed(2);
+      this.value = parseFloat(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    });
+  }
+
+  window.salvarEdicao = async function() {
+    const alertEl = document.getElementById("edit-alert");
+    alertEl.className = "alert hidden";
+
+    const tipo = document.getElementById("edit-tipo").value;
+    const data = document.getElementById("edit-data").value;
+    const valorRaw = document.getElementById("edit-valor").value.replace(/\./g, "").replace(",", ".");
+    const valor = parseFloat(valorRaw);
+    const categoria = document.getElementById("edit-categoria").value;
+    const descricao = document.getElementById("edit-descricao").value.trim();
+    const responsavel = document.getElementById("edit-responsavel").value.trim();
+    const observacoes = document.getElementById("edit-observacoes").value.trim();
+    const numDoc = document.getElementById("edit-numero-doc").value.trim();
+    const formaPagto = document.getElementById("edit-forma-pagto").value;
+
+    if (!data || !valor || !categoria || !descricao) {
+      alertEl.textContent = "Preencha todos os campos obrigatórios (*).";
+      alertEl.className = "alert alert-error";
+      return;
+    }
+    if (isNaN(valor) || valor <= 0) {
+      alertEl.textContent = "Informe um valor válido e maior que zero.";
+      alertEl.className = "alert alert-error";
+      return;
+    }
+
+    const btn = document.getElementById("btn-salvar-edicao");
+    btn.disabled = true;
+    try {
+      const [y, m] = data.split("-");
+      await updateLancamento(selectedId, {
+        tipo, data, valor, categoria, descricao,
+        responsavel: responsavel || null,
+        observacoes: observacoes || null,
+        numeroDocumento: numDoc || null,
+        formaPagamento: formaPagto || null,
+        mes: parseInt(m, 10),
+        ano: parseInt(y, 10)
+      });
+      const idx = allDocs.findIndex(x => x.id === selectedId);
+      if (idx >= 0) allDocs[idx] = { ...allDocs[idx], tipo, data, valor, categoria, descricao, responsavel: responsavel || null, observacoes: observacoes || null, numeroDocumento: numDoc || null, formaPagamento: formaPagto || null, mes: parseInt(m, 10), ano: parseInt(y, 10) };
+      closeModal("modal-editar");
+      applyFilters();
+      alertEl.textContent = "✅ Lançamento atualizado!";
+      alertEl.className = "alert alert-success";
+    } catch (e) {
+      alertEl.textContent = "Erro ao salvar: " + (e.message || "tente novamente");
+      alertEl.className = "alert alert-error";
+    }
+    btn.disabled = false;
   };
 
   window.excluirLancamento = async function() {

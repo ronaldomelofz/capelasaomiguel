@@ -267,6 +267,41 @@ export async function addLancamento(obj) {
   }
 }
 
+export async function updateLancamento(id, obj) {
+  const row = {
+    tipo: obj.tipo,
+    data: obj.data,
+    valor: obj.valor,
+    categoria: obj.categoria,
+    descricao: obj.descricao,
+    responsavel: obj.responsavel ?? null,
+    observacoes: obj.observacoes ?? null,
+    numero_documento: obj.numeroDocumento ?? null,
+    forma_pagamento: obj.formaPagamento ?? null,
+    mes: obj.mes ?? null,
+    ano: obj.ano ?? null,
+  };
+  try {
+    const data = await req("PATCH", "/lancamentos?id=eq." + encodeURIComponent(id), row);
+    const updated = Array.isArray(data) ? data[0] : data;
+    return updated ? toLancamento(updated) : obj;
+  } catch (e) {
+    const list = loadLocal(KEY_LANCAMENTOS);
+    const idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) {
+      const item = { ...list[idx], tipo: obj.tipo, data: obj.data, valor: obj.valor, categoria: obj.categoria, descricao: obj.descricao, responsavel: obj.responsavel ?? null, observacoes: obj.observacoes ?? null, numeroDocumento: obj.numeroDocumento ?? null, formaPagamento: obj.formaPagamento ?? null, mes: obj.mes ?? null, ano: obj.ano ?? null };
+      list[idx] = item;
+      saveLocal(KEY_LANCAMENTOS, list);
+      const pending = loadPendingLancamentos();
+      const pIdx = pending.findIndex(x => x.id === id);
+      if (pIdx >= 0) pending[pIdx] = { ...pending[pIdx], ...item };
+      savePendingLancamentos(pending);
+      return item;
+    }
+    return { ...obj, id };
+  }
+}
+
 export async function deleteLancamento(id) {
   try {
     await req("DELETE", "/lancamentos?id=eq." + encodeURIComponent(id));
