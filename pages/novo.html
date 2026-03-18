@@ -56,11 +56,7 @@
       </div>
       <div class="form-group">
         <label for="forma-pagto">Forma de Pagamento</label>
-        <select id="forma-pagto">
-          <option value="">— Selecione —</option>
-          <option>Dinheiro</option><option>PIX</option><option>Transferência Bancária</option>
-          <option>Cheque</option><option>Cartão de Débito</option><option>Cartão de Crédito</option><option>Boleto</option>
-        </select>
+        <select id="forma-pagto"></select>
       </div>
       <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem;">
         <a href="lancamentos.html" class="btn btn-outline">Cancelar</a>
@@ -73,8 +69,8 @@
 <script type="module">
   import { requireAuth, isAdmin } from "../js/auth.js";
   import { renderLayout } from "../js/layout.js";
-  import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA } from "../js/config.js";
-  import { addLancamento, getCategoriasCustom } from "../js/api.js";
+  import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA, FORMAS_PAGAMENTO_PADRAO } from "../js/config.js";
+  import { addLancamento, getCategoriasCustom, getFormasPagamentoCustom } from "../js/api.js";
 
   renderLayout("novo");
   const { user, profile } = await requireAuth();
@@ -86,6 +82,14 @@
 
   document.getElementById("data").value = new Date().toISOString().split("T")[0];
 
+  function populateFormasPagamento() {
+    const sel = document.getElementById("forma-pagto");
+    const custom = getFormasPagamentoCustom().map(f => f.nome);
+    const formas = [...FORMAS_PAGAMENTO_PADRAO, ...custom];
+    sel.innerHTML = '<option value="">— Selecione —</option>';
+    formas.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
+  }
+
   function populateCategories(tipo) {
     const sel = document.getElementById("categoria");
     sel.innerHTML = '<option value="">— Selecione a categoria —</option>';
@@ -94,6 +98,7 @@
     [...defaults, ...custom].forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
   }
   populateCategories("receita");
+  populateFormasPagamento();
 
   const valorEl = document.getElementById("valor");
   valorEl.addEventListener("input", () => {

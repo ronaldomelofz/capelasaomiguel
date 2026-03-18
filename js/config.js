@@ -23,6 +23,14 @@ export const CATEGORIAS_DESPESA = [
 ];
 
 // ============================================================
+//  FORMAS DE PAGAMENTO PADRÃO
+// ============================================================
+export const FORMAS_PAGAMENTO_PADRAO = [
+  "Dinheiro", "PIX", "Transferência Bancária", "Cheque",
+  "Cartão de Débito", "Cartão de Crédito", "Boleto"
+];
+
+// ============================================================
 //  PERFIS DE ACESSO
 // ============================================================
 export const PERFIS = {

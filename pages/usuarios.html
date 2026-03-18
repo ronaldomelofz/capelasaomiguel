@@ -117,7 +117,7 @@
       </div>
       <div class="form-group">
         <label>E-mail</label>
-        <input type="email" id="eu-email" readonly style="background:#f5f6f8;cursor:not-allowed;" />
+        <input type="email" id="eu-email" placeholder="email@exemplo.com" />
       </div>
       <div class="form-group">
         <label>Usuário de acesso</label>
@@ -125,7 +125,10 @@
       </div>
       <div class="form-group">
         <label>Nova senha (deixe em branco para manter)</label>
-        <input type="password" id="eu-senha" placeholder="Nova senha" />
+        <div class="password-input-wrap">
+          <input type="password" id="eu-senha" placeholder="Nova senha" />
+          <button type="button" class="btn-toggle-password" onclick="toggleEditPassword()" title="Mostrar/ocultar senha">👁</button>
+        </div>
       </div>
       <div class="form-group">
         <label>Perfil</label>
@@ -196,6 +199,14 @@
 
   window.openModal = id => document.getElementById(id).classList.add("open");
   window.closeModal = id => document.getElementById(id).classList.remove("open");
+
+  window.toggleEditPassword = function() {
+    const input = document.getElementById("eu-senha");
+    const btn = event.target;
+    const isPass = input.type === "password";
+    input.type = isPass ? "text" : "password";
+    btn.textContent = isPass ? "🙈" : "👁";
+  };
 
   window.criarUsuario = async function() {
     const nome = document.getElementById("u-nome").value.trim();
@@ -268,6 +279,7 @@
   window.salvarEdicaoUser = async function() {
     const uid = document.getElementById("eu-uid").value;
     const nome = document.getElementById("eu-nome").value.trim();
+    const email = document.getElementById("eu-email").value.trim();
     const cpf = document.getElementById("eu-cpf").value.replace(/\D/g, "");
     const endereco = document.getElementById("eu-endereco").value.trim();
     const usuario = document.getElementById("eu-usuario").value.trim();
@@ -281,8 +293,13 @@
       editAlert.className = "alert alert-error";
       return;
     }
+    if (!nome || !email) {
+      editAlert.textContent = "Preencha nome e e-mail.";
+      editAlert.className = "alert alert-error";
+      return;
+    }
     try {
-      const update = { nome, perfil, endereco: endereco || null, usuario: usuario || null, cpf: cpf || null, observacoes: obs || null };
+      const update = { nome, email, perfil, endereco: endereco || null, usuario: usuario || null, cpf: cpf || null, observacoes: obs || null };
       if (novaSenha && novaSenha.length >= 6) {
         update.senhaHash = await hashPassword(novaSenha);
       }

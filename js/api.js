@@ -1,14 +1,14 @@
 // js/api.js — API local com localStorage (sem Firebase, sem backend)
 
 const STORAGE_KEY = "livro_razao";
-const KEYS = { LANCAMENTOS: "lancamentos", USUARIOS: "usuarios", CATEGORIAS: "categorias", SESSION: "session" };
+const KEYS = { LANCAMENTOS: "lancamentos", USUARIOS: "usuarios", CATEGORIAS: "categorias", FORMAS_PAGAMENTO: "formasPagamento", SESSION: "session" };
 
 function getKey(k) { return `${STORAGE_KEY}_${k}`; }
 
 function load(k) {
   try {
     const data = localStorage.getItem(getKey(k));
-    return data ? JSON.parse(data) : (k === KEYS.USUARIOS ? [] : k === KEYS.LANCAMENTOS ? [] : k === KEYS.CATEGORIAS ? [] : null);
+    return data ? JSON.parse(data) : (k === KEYS.USUARIOS ? [] : k === KEYS.LANCAMENTOS ? [] : k === KEYS.CATEGORIAS ? [] : k === KEYS.FORMAS_PAGAMENTO ? [] : null);
   } catch { return []; }
 }
 
@@ -75,4 +75,20 @@ export function addCategoria(obj) {
 
 export function deleteCategoria(id) {
   save(KEYS.CATEGORIAS, load(KEYS.CATEGORIAS).filter(x => x.id !== id));
+}
+
+// ========== FORMAS DE PAGAMENTO ==========
+export function getFormasPagamentoCustom() {
+  return load(KEYS.FORMAS_PAGAMENTO);
+}
+
+export function addFormaPagamento(nome) {
+  const list = load(KEYS.FORMAS_PAGAMENTO);
+  const id = "fp" + Date.now();
+  list.push({ id, nome });
+  save(KEYS.FORMAS_PAGAMENTO, list);
+}
+
+export function deleteFormaPagamento(id) {
+  save(KEYS.FORMAS_PAGAMENTO, load(KEYS.FORMAS_PAGAMENTO).filter(x => x.id !== id));
 }

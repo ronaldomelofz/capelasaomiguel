@@ -9,6 +9,7 @@ export function renderLayout(activeItem) {
     { id: "exportar",     icon: "📤", label: "Exportar",        href: "exportar.html",    section: null },
     { id: "usuarios",     icon: "👥", label: "Usuários",        href: "usuarios.html",    section: "Administração", adminOnly: true },
     { id: "categorias",   icon: "🏷️", label: "Categorias",     href: "categorias.html",  section: null, adminOnly: true },
+    { id: "formas-pagamento", icon: "💳", label: "Formas de Pagamento", href: "formas-pagamento.html", section: null, adminOnly: true },
     { id: "auditoria",    icon: "🔍", label: "Auditoria",       href: "auditoria.html",   section: null, adminOnly: true },
   ];
 

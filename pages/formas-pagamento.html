@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Formas de Pagamento — Livro Razão</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">💳 Formas de Pagamento</span>
+</div>
+
+<div class="page-body">
+  <div class="alert alert-info mb-2">
+    ℹ️ Gerencie as formas de pagamento disponíveis nos lançamentos. As formas padrão não podem ser removidas.
+  </div>
+
+  <div id="fp-alert" class="alert hidden"></div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Formas de Pagamento Cadastradas</span>
+      <button class="btn btn-success btn-sm" onclick="openAdd()">+ Adicionar</button>
+    </div>
+    <div id="list-formas"></div>
+  </div>
+</div>
+
+<!-- Modal Adicionar -->
+<div class="modal-overlay" id="modal-add-fp">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Nova Forma de Pagamento</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-fp')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nome *</label>
+        <input type="text" id="fp-nome" placeholder="Ex: Cartão Corporativo" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-fp')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFormaPagamento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { requireAuth, isAdmin } from "../js/auth.js";
+  import { FORMAS_PAGAMENTO_PADRAO } from "../js/config.js";
+  import { renderLayout } from "../js/layout.js";
+  import { getFormasPagamentoCustom, addFormaPagamento, deleteFormaPagamento } from "../js/api.js";
+
+  renderLayout("formas-pagamento");
+  const { user, profile } = await requireAuth();
+
+  if (!isAdmin(profile)) {
+    document.querySelector(".page-body").innerHTML = `<div class="alert alert-error">⛔ Acesso negado.</div>`;
+    throw new Error("Acesso negado");
+  }
+
+  function loadFormas() {
+    const custom = getFormasPagamentoCustom();
+    const container = document.getElementById("list-formas");
+
+    let html = `<div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:.5rem 0 .35rem;">Padrão do Sistema</div>`;
+    html += FORMAS_PAGAMENTO_PADRAO.map(nome => `
+      <div style="padding:.5rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem;">
+        <span style="color:var(--navy)">💳</span>
+        <span style="flex:1;font-size:.9rem">${nome}</span>
+        <span style="font-size:.75rem;color:var(--text-muted);background:#f0f0f0;padding:.1rem .4rem;border-radius:4px;">padrão</span>
+      </div>`).join("");
+
+    if (custom.length) {
+      html += `<div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:.75rem 0 .35rem;margin-top:.5rem;">Personalizadas</div>`;
+      html += custom.map(f => `
+        <div style="padding:.5rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem;">
+          <span style="color:var(--navy)">💳</span>
+          <span style="flex:1;font-size:.9rem">${f.nome}</span>
+          <button class="btn btn-danger btn-sm" onclick="excluirFormaPagamento('${f.id}')">🗑</button>
+        </div>`).join("");
+    }
+
+    container.innerHTML = html;
+  }
+
+  window.openAdd = function() {
+    document.getElementById("fp-nome").value = "";
+    document.getElementById("modal-add-fp").classList.add("open");
+  };
+
+  window.closeModal = id => document.getElementById(id).classList.remove("open");
+
+  window.salvarFormaPagamento = function() {
+    const nome = document.getElementById("fp-nome").value.trim();
+    if (!nome) { alert("Digite o nome da forma de pagamento."); return; }
+    addFormaPagamento(nome);
+    closeModal("modal-add-fp");
+    const al = document.getElementById("fp-alert");
+    al.textContent = "✅ Forma de pagamento adicionada!"; al.className = "alert alert-success";
+    setTimeout(() => { al.className = "alert hidden"; }, 3000);
+    loadFormas();
+  };
+
+  window.excluirFormaPagamento = function(id) {
+    if (!confirm("Excluir esta forma de pagamento?")) return;
+    deleteFormaPagamento(id);
+    const al = document.getElementById("fp-alert");
+    al.textContent = "✅ Forma de pagamento excluída!"; al.className = "alert alert-success";
+    setTimeout(() => { al.className = "alert hidden"; }, 3000);
+    loadFormas();
+  };
+
+  loadFormas();
+</script>
+</body>
+</html>
