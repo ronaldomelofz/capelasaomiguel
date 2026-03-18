@@ -1,4 +1,5 @@
-// js/api.js — API Supabase + fallback localStorage (funciona offline)
+// js/api.js — API Supabase resiliente 24/7
+// Retry com backoff, timeout, fila de sincronização e fallback localStorage
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase-config.js";
 
@@ -7,6 +8,31 @@ const KEY_USUARIOS = "livro_razao_usuarios";
 const KEY_LANCAMENTOS = "livro_razao_lancamentos";
 const KEY_CATEGORIAS = "livro_razao_categorias";
 const KEY_FORMAS = "livro_razao_formasPagamento";
+const KEY_PENDING_LANCAMENTOS = "livro_razao_pending_lancamentos";
+
+const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [1000, 2000, 4000];
+
+let _connectionStatus = "online";
+let _statusListeners = [];
+
+function setStatus(s) {
+  if (_connectionStatus !== s) {
+    _connectionStatus = s;
+    _statusListeners.forEach(fn => fn(s));
+  }
+}
+
+export function getConnectionStatus() {
+  return _connectionStatus;
+}
+
+export function onConnectionStatusChange(fn) {
+  _statusListeners.push(fn);
+  fn(_connectionStatus);
+  return () => { _statusListeners = _statusListeners.filter(x => x !== fn); };
+}
 
 function headers() {
   const key = SUPABASE_ANON_KEY;
@@ -21,18 +47,65 @@ function headers() {
   };
 }
 
+function isRetryableError(err) {
+  const msg = (err?.message || "").toLowerCase();
+  return (
+    msg.includes("failed to fetch") ||
+    msg.includes("network") ||
+    msg.includes("timeout") ||
+    msg.includes("networkerror") ||
+    err?.name === "TypeError" ||
+    err?.name === "AbortError"
+  );
+}
+
+function isRetryableStatus(status) {
+  return [502, 503, 504, 520, 521, 522, 523, 524].includes(status);
+}
+
 async function req(method, path, body) {
   const opt = { method, headers: headers(), mode: "cors" };
   if (body) opt.body = JSON.stringify(body);
-  const r = await fetch(BASE + path, opt);
-  const text = await r.text();
-  let data = null;
-  if (text) try { data = JSON.parse(text); } catch {}
-  if (!r.ok) {
-    const msg = (data && data.message) || data?.error_description || data?.msg || r.statusText || "Erro na requisição";
-    throw new Error(msg);
+
+  let lastError = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    opt.signal = controller.signal;
+
+    try {
+      const r = await fetch(BASE + path, opt);
+      clearTimeout(timeoutId);
+      const text = await r.text();
+      let data = null;
+      if (text) try { data = JSON.parse(text); } catch {}
+
+      if (!r.ok) {
+        const msg = (data && data.message) || data?.error_description || data?.msg || r.statusText || "Erro na requisição";
+        const err = new Error(msg);
+        err.status = r.status;
+        if (attempt < MAX_RETRIES && isRetryableStatus(r.status)) {
+          lastError = err;
+          await new Promise(res => setTimeout(res, RETRY_DELAYS[attempt]));
+          continue;
+        }
+        throw err;
+      }
+      setStatus("online");
+      return data;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      lastError = e;
+      if (attempt < MAX_RETRIES && isRetryableError(e)) {
+        await new Promise(res => setTimeout(res, RETRY_DELAYS[attempt]));
+        continue;
+      }
+      setStatus("offline");
+      throw e;
+    }
   }
-  return data;
+  setStatus("offline");
+  throw lastError || new Error("Erro na requisição");
 }
 
 function loadLocal(k) {
@@ -44,6 +117,14 @@ function loadLocal(k) {
 
 function saveLocal(k, arr) {
   localStorage.setItem(k, JSON.stringify(arr));
+}
+
+function loadPendingLancamentos() {
+  return loadLocal(KEY_PENDING_LANCAMENTOS);
+}
+
+function savePendingLancamentos(arr) {
+  saveLocal(KEY_PENDING_LANCAMENTOS, arr);
 }
 
 function toUsuario(row) {
@@ -85,16 +166,56 @@ function toLancamento(row) {
   };
 }
 
+async function syncPendingLancamentos() {
+  const pending = loadPendingLancamentos();
+  if (!pending.length) return;
+
+  setStatus("syncing");
+  try {
+    const remaining = [];
+    for (const item of pending) {
+      try {
+        const row = {
+          id: item.id,
+          tipo: item.tipo,
+          data: item.data,
+          valor: item.valor,
+          categoria: item.categoria,
+          descricao: item.descricao,
+          responsavel: item.responsavel ?? null,
+          observacoes: item.observacoes ?? null,
+          numero_documento: item.numeroDocumento ?? null,
+          forma_pagamento: item.formaPagamento ?? null,
+          criado_por: item.criadoPor ?? null,
+          criado_por_email: item.criadoPorEmail ?? null,
+          mes: item.mes ?? null,
+          ano: item.ano ?? null,
+        };
+        await req("POST", "/lancamentos", row);
+      } catch (e) {
+        const isDuplicate = (e?.message || "").toLowerCase().includes("duplicate") || e?.status === 409;
+        if (!isDuplicate) remaining.push(item);
+      }
+    }
+    savePendingLancamentos(remaining);
+  } finally {
+    setStatus("online");
+  }
+}
+
 // ========== LANÇAMENTOS ==========
 export async function getLancamentos() {
   try {
+    await syncPendingLancamentos();
     const data = await req("GET", "/lancamentos?select=*&order=data.desc");
     const list = (Array.isArray(data) ? data : []).map(toLancamento);
     if (list.length) saveLocal(KEY_LANCAMENTOS, list);
     return list;
   } catch (e) {
     const local = loadLocal(KEY_LANCAMENTOS);
-    return local.map(toLancamento).sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+    const pending = loadPendingLancamentos();
+    const merged = [...pending, ...local.filter(l => !pending.some(p => p.id === l.id))];
+    return merged.map(toLancamento).sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   }
 }
 
@@ -133,6 +254,9 @@ export async function addLancamento(obj) {
     const list = loadLocal(KEY_LANCAMENTOS);
     list.unshift(item);
     saveLocal(KEY_LANCAMENTOS, list);
+    const pending = loadPendingLancamentos();
+    pending.unshift(item);
+    savePendingLancamentos(pending);
     return item;
   }
 }
@@ -143,6 +267,8 @@ export async function deleteLancamento(id) {
   } catch (e) {}
   const list = loadLocal(KEY_LANCAMENTOS).filter(x => x.id !== id);
   saveLocal(KEY_LANCAMENTOS, list);
+  const pending = loadPendingLancamentos().filter(x => x.id !== id);
+  savePendingLancamentos(pending);
 }
 
 export async function getLancamentoById(id) {
@@ -152,8 +278,9 @@ export async function getLancamentoById(id) {
     return row ? toLancamento(row) : null;
   } catch (e) {
     const list = loadLocal(KEY_LANCAMENTOS);
-    const row = list.find(x => x.id === id);
-    return row ? toLancamento(row) : null;
+    const pending = loadPendingLancamentos();
+    const found = list.find(x => x.id === id) || pending.find(x => x.id === id);
+    return found ? toLancamento(found) : null;
   }
 }
 
@@ -228,7 +355,6 @@ export async function deleteUsuario(uid) {
   const list = loadLocal(KEY_USUARIOS).filter(x => x.uid !== uid);
   saveLocal(KEY_USUARIOS, list);
 }
-
 
 // ========== CATEGORIAS ==========
 export async function getCategoriasCustom() {

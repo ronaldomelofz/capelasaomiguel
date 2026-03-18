@@ -40,3 +40,18 @@ Edite `js/supabase-config.js` com a URL e chave anon. Este arquivo está no `.gi
 - Todos os usuários veem os mesmos dados
 - Backup e histórico no PostgreSQL
 - Sem necessidade de export/import entre dispositivos
+
+## Backend resiliente (24/7)
+
+O sistema foi projetado para funcionar mesmo com falhas temporárias:
+
+- **Retry automático**: até 3 tentativas com backoff exponencial (1s, 2s, 4s) em erros de rede
+- **Timeout**: 15 segundos por requisição para evitar travamentos
+- **Fallback localStorage**: se o Supabase não responder, os dados são salvos localmente
+- **Fila de sincronização**: lançamentos feitos offline são enviados ao Supabase quando a conexão voltar
+- **Indicador de status**: na barra lateral, mostra "Conectado", "Modo local" ou "Sincronizando"
+
+O Supabase é um serviço cloud com alta disponibilidade. Em caso de "Failed to fetch", verifique:
+- Variáveis de ambiente no Netlify (SUPABASE_URL e SUPABASE_ANON_KEY)
+- CORS no projeto Supabase (Settings → API → deve permitir seu domínio)
+- Plano do Supabase (free tier pode ter cold start após inatividade)

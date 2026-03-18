@@ -38,6 +38,7 @@ export function renderLayout(activeItem) {
     <div class="sidebar-user">
       <div class="user-name" id="nav-username">—</div>
       <span id="nav-role-badge" class="role-badge badge-viewer">Visualizador</span>
+      <div id="connection-status" class="connection-status" title="Status da conexão com o banco de dados"></div>
     </div>
     <nav class="sidebar-nav">${navHTML}</nav>
     <div class="sidebar-footer">
@@ -50,6 +51,7 @@ export function renderLayout(activeItem) {
 
   // Insert sidebar before first child of body
   document.body.insertAdjacentHTML("afterbegin", sidebar);
+  initConnectionStatus();
 
   // Wrap remaining body content
   const mainEl = document.getElementById("app-main");
@@ -76,6 +78,27 @@ window.doLogout = async function() {
 window.toggleSidebar = function() {
   document.getElementById("sidebar").classList.toggle("open");
 };
+
+function initConnectionStatus() {
+  const el = document.getElementById("connection-status");
+  if (!el) return;
+  const labels = { online: "● Conectado", offline: "○ Modo local (clique para tentar)", syncing: "⟳ Sincronizando" };
+  const classes = { online: "status-online", offline: "status-offline status-clickable", syncing: "status-syncing" };
+  function update(s) {
+    el.textContent = labels[s] || labels.online;
+    el.className = "connection-status " + (classes[s] || classes.online);
+  }
+  import("./api.js").then(({ onConnectionStatusChange, getConnectionStatus, getLancamentos }) => {
+    onConnectionStatusChange(update);
+    el.onclick = () => {
+      if (getConnectionStatus() === "offline") {
+        el.textContent = "⟳ Tentando...";
+        getLancamentos().then(() => update(getConnectionStatus())).catch(() => update("offline"));
+      }
+    };
+  });
+  window.addEventListener("online", () => import("./api.js").then(m => m.getLancamentos?.()).catch(() => {}));
+}
 
 // Close sidebar on outside click
 document.addEventListener("click", e => {
