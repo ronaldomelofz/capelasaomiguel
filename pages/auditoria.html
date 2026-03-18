@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auditoria — Livro Razão</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">🔍 Log de Auditoria</span>
+</div>
+
+<div class="page-body">
+  <div class="alert alert-info mb-2">
+    📋 Registro cronológico de todos os lançamentos cadastrados no sistema, com informações de quem e quando foi feito cada registro.
+  </div>
+
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label>Usuário</label>
+      <select id="f-user"><option value="">Todos</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Tipo</label>
+      <select id="f-tipo">
+        <option value="">Todos</option>
+        <option value="receita">Receita</option>
+        <option value="despesa">Despesa</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Período início</label>
+      <input type="date" id="f-inicio" />
+    </div>
+    <div class="filter-group">
+      <label>Período fim</label>
+      <input type="date" id="f-fim" />
+    </div>
+    <button class="btn btn-primary" onclick="applyFilters()">🔍 Filtrar</button>
+    <button class="btn btn-outline" onclick="resetFilters()">↺</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Histórico de Lançamentos</span>
+      <span id="audit-count" class="text-muted" style="font-size:.85rem"></span>
+    </div>
+    <div id="audit-list" style="padding:0 .5rem;">
+      <div class="text-center text-muted" style="padding:2rem">Carregando...</div>
+    </div>
+    <div class="pagination">
+      <div class="pagination-info" id="pag-info"></div>
+      <div class="pagination-controls" id="pag-controls"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { requireAuth, isAdmin, getDB, formatBRL, formatDate, formatDatetime } from "../js/auth.js";
+  import { renderLayout } from "../js/layout.js";
+  import { collection, query, orderBy, getDocs }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  renderLayout("auditoria");
+  const { user, profile } = await requireAuth();
+
+  if (!isAdmin(profile)) {
+    document.querySelector(".page-body").innerHTML = `<div class="alert alert-error">⛔ Acesso negado.</div>`;
+    throw new Error("Acesso negado");
+  }
+
+  const db = getDB();
+  let allDocs = [], filtered = [], currentPage = 1;
+  const PAGE_SIZE = 30;
+
+  async function load() {
+    const snap = await getDocs(query(collection(db,"lancamentos"), orderBy("criadoEm","desc")));
+    allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Populate user filter
+    const users = [...new Set(allDocs.map(d => d.criadoPorEmail).filter(Boolean))];
+    const userSel = document.getElementById("f-user");
+    users.forEach(u => { const o = document.createElement("option"); o.value=u; o.textContent=u; userSel.appendChild(o); });
+
+    applyFilters();
+  }
+
+  window.applyFilters = function() {
+    const userF  = document.getElementById("f-user").value;
+    const tipoF  = document.getElementById("f-tipo").value;
+    const inicio = document.getElementById("f-inicio").value;
+    const fim    = document.getElementById("f-fim").value;
+
+    filtered = allDocs.filter(d => {
+      if (userF && d.criadoPorEmail !== userF) return false;
+      if (tipoF && d.tipo !== tipoF) return false;
+      if (inicio && d.data < inicio) return false;
+      if (fim && d.data > fim) return false;
+      return true;
+    });
+
+    currentPage = 1;
+    renderPage();
+  };
+
+  window.resetFilters = function() {
+    document.getElementById("f-user").value = "";
+    document.getElementById("f-tipo").value = "";
+    document.getElementById("f-inicio").value = "";
+    document.getElementById("f-fim").value = "";
+    filtered = [...allDocs];
+    currentPage = 1;
+    renderPage();
+  };
+
+  function renderPage() {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const page  = filtered.slice(start, start + PAGE_SIZE);
+    const list  = document.getElementById("audit-list");
+    document.getElementById("audit-count").textContent = `${filtered.length} registros`;
+
+    if (!filtered.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><h4>Nenhum registro encontrado</h4></div>`;
+      document.getElementById("pag-info").textContent = "";
+      document.getElementById("pag-controls").innerHTML = "";
+      return;
+    }
+
+    list.innerHTML = page.map(d => `
+      <div class="audit-entry">
+        <div class="audit-dot ${d.tipo}"></div>
+        <div class="audit-content">
+          <div class="audit-title">
+            <span class="badge badge-${d.tipo}">${d.tipo==="receita"?"Receita":"Despesa"}</span>
+            &nbsp;${formatBRL(d.valor)} — ${d.descricao}
+          </div>
+          <div class="audit-meta">
+            📅 ${formatDate(d.data)} &nbsp;|&nbsp;
+            🏷️ ${d.categoria||"—"} &nbsp;|&nbsp;
+            ${d.formaPagamento ? `💳 ${d.formaPagamento} &nbsp;|&nbsp;` : ""}
+            ${d.numeroDocumento ? `📄 Doc: ${d.numeroDocumento} &nbsp;|&nbsp;` : ""}
+            👤 Lançado por <strong>${d.criadoPorEmail||"—"}</strong>
+            ${d.criadoEm ? ` em ${formatDatetime(d.criadoEm)}` : ""}
+          </div>
+          ${d.observacoes ? `<div class="audit-meta" style="margin-top:.3rem;font-style:italic">💬 ${d.observacoes}</div>` : ""}
+        </div>
+      </div>`).join("");
+
+    // Pagination
+    const total = filtered.length;
+    const pages = Math.ceil(total / PAGE_SIZE);
+    document.getElementById("pag-info").textContent = `${start+1}–${Math.min(start+PAGE_SIZE, total)} de ${total}`;
+    let pHTML = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?"disabled":""}>‹</button>`;
+    for (let p = Math.max(1,currentPage-2); p <= Math.min(pages,currentPage+2); p++) {
+      pHTML += `<button class="page-btn ${p===currentPage?"active":""}" onclick="goPage(${p})">${p}</button>`;
+    }
+    pHTML += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?"disabled":""}>›</button>`;
+    document.getElementById("pag-controls").innerHTML = pHTML;
+  }
+
+  window.goPage = p => { currentPage = p; renderPage(); };
+
+  load();
+</script>
+</body>
+</html>

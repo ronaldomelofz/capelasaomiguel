@@ -1,0 +1,12 @@
+{
+  "name": "livro-razao-paroquia",
+  "version": "1.0.0",
+  "description": "Sistema de gestão financeira paroquial - Livro Razão",
+  "scripts": {
+    "build": "node scripts/build-config.js",
+    "postbuild": "echo Build concluído"
+  },
+  "keywords": ["paroquia", "financeiro", "firebase", "livro-razao"],
+  "author": "",
+  "license": "MIT"
+}

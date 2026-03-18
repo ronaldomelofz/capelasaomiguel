@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Categorias — Livro Razão</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">🏷️ Categorias</span>
+</div>
+
+<div class="page-body">
+  <div class="alert alert-info mb-2">
+    ℹ️ As categorias padrão estão definidas em <code>js/config.js</code>. Aqui você pode gerenciar categorias customizadas adicionais armazenadas no banco de dados.
+  </div>
+
+  <div id="cat-alert" class="alert hidden"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;">
+
+    <!-- Receitas -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" style="color:var(--green)">📈 Categorias de Receita</span>
+        <button class="btn btn-outline btn-sm" onclick="openAdd('receita')">+ Adicionar</button>
+      </div>
+      <div id="list-receita"></div>
+    </div>
+
+    <!-- Despesas -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" style="color:var(--red)">📉 Categorias de Despesa</span>
+        <button class="btn btn-outline btn-sm" onclick="openAdd('despesa')">+ Adicionar</button>
+      </div>
+      <div id="list-despesa"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Add Category Modal -->
+<div class="modal-overlay" id="modal-add-cat">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-cat-title">Nova Categoria</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-cat')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nome da Categoria *</label>
+        <input type="text" id="cat-nome" placeholder="Ex: Coleta Especial" />
+      </div>
+      <input type="hidden" id="cat-tipo" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-cat')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCategoria()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { requireAuth, isAdmin, getDB } from "../js/auth.js";
+  import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA } from "../js/config.js";
+  import { renderLayout } from "../js/layout.js";
+  import { collection, getDocs, addDoc, deleteDoc, doc, query, where }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  renderLayout("categorias");
+  const { user, profile } = await requireAuth();
+
+  if (!isAdmin(profile)) {
+    document.querySelector(".page-body").innerHTML = `<div class="alert alert-error">⛔ Acesso negado.</div>`;
+    throw new Error("Acesso negado");
+  }
+
+  const db = getDB();
+
+  async function loadCategories() {
+    const snap = await getDocs(collection(db, "categorias"));
+    const custom = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    renderList("receita", CATEGORIAS_RECEITA, custom.filter(c => c.tipo === "receita"));
+    renderList("despesa", CATEGORIAS_DESPESA, custom.filter(c => c.tipo === "despesa"));
+  }
+
+  function renderList(tipo, defaults, custom) {
+    const container = document.getElementById(`list-${tipo}`);
+    const color = tipo === "receita" ? "var(--green)" : "var(--red)";
+
+    let html = `<div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:.5rem 0 .35rem;">Padrão do Sistema</div>`;
+    html += defaults.map(c => `
+      <div style="padding:.5rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem;">
+        <span style="color:${color}">●</span>
+        <span style="flex:1;font-size:.9rem">${c}</span>
+        <span style="font-size:.75rem;color:var(--text-muted);background:#f0f0f0;padding:.1rem .4rem;border-radius:4px;">padrão</span>
+      </div>`).join("");
+
+    if (custom.length) {
+      html += `<div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:.75rem 0 .35rem;margin-top:.5rem;">Personalizadas</div>`;
+      html += custom.map(c => `
+        <div style="padding:.5rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem;">
+          <span style="color:${color}">●</span>
+          <span style="flex:1;font-size:.9rem">${c.nome}</span>
+          <button class="btn btn-danger btn-sm" onclick="excluirCategoria('${c.id}')">🗑</button>
+        </div>`).join("");
+    }
+
+    container.innerHTML = html;
+  }
+
+  window.openAdd = function(tipo) {
+    document.getElementById("cat-tipo").value = tipo;
+    document.getElementById("cat-nome").value = "";
+    document.getElementById("modal-cat-title").textContent =
+      tipo === "receita" ? "Nova Categoria de Receita" : "Nova Categoria de Despesa";
+    document.getElementById("modal-add-cat").classList.add("open");
+  };
+
+  window.closeModal = id => document.getElementById(id).classList.remove("open");
+
+  window.salvarCategoria = async function() {
+    const nome = document.getElementById("cat-nome").value.trim();
+    const tipo = document.getElementById("cat-tipo").value;
+    if (!nome) { alert("Digite o nome da categoria."); return; }
+    try {
+      await addDoc(collection(db, "categorias"), { nome, tipo, criadoEm: new Date(), criadoPor: user.uid });
+      closeModal("modal-add-cat");
+      const al = document.getElementById("cat-alert");
+      al.textContent = "✅ Categoria adicionada!"; al.className = "alert alert-success";
+      setTimeout(() => { al.className = "alert hidden"; }, 3000);
+      await loadCategories();
+    } catch(e) { alert("Erro: " + e.message); }
+  };
+
+  window.excluirCategoria = async function(id) {
+    if (!confirm("Excluir esta categoria?")) return;
+    try {
+      await deleteDoc(doc(db, "categorias", id));
+      const al = document.getElementById("cat-alert");
+      al.textContent = "✅ Categoria excluída!"; al.className = "alert alert-success";
+      setTimeout(() => { al.className = "alert hidden"; }, 3000);
+      await loadCategories();
+    } catch(e) { alert("Erro: " + e.message); }
+  };
+
+  loadCategories();
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+// ============================================================
+//  FIREBASE FIRESTORE SECURITY RULES
+//  Cole estas regras no Firebase Console:
+//  Firestore Database → Rules
+// ============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil == 'admin';
+    }
+
+    // Lançamentos: todos autenticados podem ler; só admin pode criar/editar/excluir
+    match /lancamentos/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Usuários: todos podem ler o próprio perfil; só admin gerencia todos
+    match /usuarios/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Categorias: todos podem ler; só admin edita
+    match /categorias/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

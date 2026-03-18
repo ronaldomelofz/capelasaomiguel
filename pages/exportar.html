@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exportar — Livro Razão</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+  <!-- SheetJS for Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF for PDF -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">📤 Exportar Dados</span>
+</div>
+
+<div class="page-body">
+  <div style="max-width:640px;margin:0 auto;">
+
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title">Configurar Exportação</span></div>
+
+      <div class="form-row cols-3">
+        <div class="form-group">
+          <label>Tipo</label>
+          <select id="exp-tipo">
+            <option value="">Todos</option>
+            <option value="receita">Receitas</option>
+            <option value="despesa">Despesas</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mês</label>
+          <select id="exp-mes"><option value="">Todos</option></select>
+        </div>
+        <div class="form-group">
+          <label>Ano</label>
+          <select id="exp-ano"><option value="">Todos</option></select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Paróquia / Identificação (para cabeçalho do PDF)</label>
+        <input type="text" id="exp-nome-paroquia" placeholder="Ex: Paróquia Nossa Senhora Aparecida" />
+      </div>
+
+      <div id="exp-status" class="alert hidden"></div>
+
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem;">
+        <button class="btn btn-primary" onclick="exportarExcel()">
+          📊 Exportar Excel (.xlsx)
+        </button>
+        <button class="btn btn-gold" onclick="exportarPDF()">
+          📄 Exportar PDF
+        </button>
+        <button class="btn btn-outline" onclick="imprimirRelatorio()">
+          🖨️ Imprimir
+        </button>
+      </div>
+    </div>
+
+    <div class="card" id="preview-card" style="display:none;">
+      <div class="card-header">
+        <span class="card-title">Pré-visualização</span>
+        <span id="preview-count" class="text-muted" style="font-size:.85rem"></span>
+      </div>
+      <div class="table-wrapper" style="max-height:400px;overflow-y:auto;">
+        <table id="tbl-preview">
+          <thead>
+            <tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Forma Pagto</th><th class="text-right">Valor</th></tr>
+          </thead>
+          <tbody id="tbody-preview"></tbody>
+          <tfoot id="tfoot-preview"></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { requireAuth, getDB, formatBRL, formatDate } from "../js/auth.js";
+  import { renderLayout } from "../js/layout.js";
+  import { collection, query, where, orderBy, getDocs }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  renderLayout("exportar");
+  await requireAuth();
+  const db = getDB();
+
+  const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const now = new Date();
+
+  const mesEl = document.getElementById("exp-mes");
+  meses.forEach((m,i) => { const o = document.createElement("option"); o.value=i+1; o.textContent=m; mesEl.appendChild(o); });
+  mesEl.value = now.getMonth() + 1;
+
+  const anoEl = document.getElementById("exp-ano");
+  for (let y = now.getFullYear(); y >= now.getFullYear()-5; y--) {
+    const o = document.createElement("option"); o.value=y; o.textContent=y; anoEl.appendChild(o);
+  }
+
+  let dados = [];
+
+  async function fetchDados() {
+    const tipo = document.getElementById("exp-tipo").value;
+    const mes  = document.getElementById("exp-mes").value;
+    const ano  = document.getElementById("exp-ano").value;
+
+    let q = collection(db, "lancamentos");
+    const constraints = [orderBy("data", "desc")];
+    if (tipo) constraints.unshift(where("tipo", "==", tipo));
+    if (mes)  constraints.unshift(where("mes", "==", +mes));
+    if (ano)  constraints.unshift(where("ano", "==", +ano));
+
+    try {
+      const snap = await getDocs(query(q, ...constraints));
+      dados = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch(e) {
+      // Firestore may need index — fallback: fetch all and filter
+      const snap = await getDocs(query(collection(db,"lancamentos"), orderBy("data","desc")));
+      dados = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => {
+        if (tipo && d.tipo !== tipo) return false;
+        if (mes && d.mes !== +mes) return false;
+        if (ano && d.ano !== +ano) return false;
+        return true;
+      });
+    }
+
+    // Preview
+    let r = 0, de = 0;
+    dados.forEach(d => { if (d.tipo === "receita") r += d.valor; else de += d.valor; });
+    document.getElementById("preview-count").textContent = `${dados.length} registros`;
+    document.getElementById("tbody-preview").innerHTML = dados.slice(0,50).map(d => `
+      <tr>
+        <td>${formatDate(d.data)}</td>
+        <td><span class="badge badge-${d.tipo}">${d.tipo==="receita"?"Receita":"Despesa"}</span></td>
+        <td>${d.categoria||"—"}</td>
+        <td>${d.descricao}</td>
+        <td>${d.formaPagamento||"—"}</td>
+        <td class="text-right val-${d.tipo}">${formatBRL(d.valor)}</td>
+      </tr>`).join("") || `<tr><td colspan="6" class="text-center text-muted">Nenhum dado</td></tr>`;
+    document.getElementById("tfoot-preview").innerHTML = `
+      <tr style="font-weight:700;background:#f9fafc;">
+        <td colspan="5">TOTAIS</td>
+        <td class="text-right">
+          <div class="val-receita">${formatBRL(r)}</div>
+          <div class="val-despesa">${formatBRL(de)}</div>
+        </td>
+      </tr>`;
+    document.getElementById("preview-card").style.display = "";
+    return dados;
+  }
+
+  window.exportarExcel = async function() {
+    setStatus("Preparando Excel...", "info");
+    await fetchDados();
+
+    const rows = dados.map(d => ({
+      Data: formatDate(d.data),
+      Tipo: d.tipo === "receita" ? "Receita" : "Despesa",
+      Categoria: d.categoria || "",
+      Descrição: d.descricao,
+      "Forma de Pagamento": d.formaPagamento || "",
+      Responsável: d.responsavel || "",
+      "Nº Documento": d.numeroDocumento || "",
+      Observações: d.observacoes || "",
+      "Valor (R$)": d.valor
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [9,8,20,35,16,16,12,30,12].map(w => ({wch:w}));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Lançamentos");
+
+    // Summary sheet
+    let r = 0, de = 0;
+    dados.forEach(d => { if (d.tipo==="receita") r += d.valor; else de += d.valor; });
+    const sumRows = [
+      ["RESUMO"],
+      ["Total Receitas", r],
+      ["Total Despesas", de],
+      ["Saldo", r - de],
+      ["Total Lançamentos", dados.length],
+      ["Exportado em", new Date().toLocaleString("pt-BR")]
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(sumRows);
+    XLSX.utils.book_append_sheet(wb, ws2, "Resumo");
+
+    const filename = `lancamentos_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    setStatus("✅ Excel exportado com sucesso!", "success");
+  };
+
+  window.exportarPDF = async function() {
+    setStatus("Gerando PDF...", "info");
+    await fetchDados();
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+
+    const paroquia = document.getElementById("exp-nome-paroquia").value || "Paróquia";
+    const mes  = document.getElementById("exp-mes").value;
+    const ano  = document.getElementById("exp-ano").value;
+    const periodo = mes && ano ? `${meses[+mes-1]} / ${ano}` : ano || "Todos os períodos";
+
+    // Header
+    doc.setFontSize(16); doc.setFont("helvetica","bold");
+    doc.text("✝ Livro Razão — " + paroquia, 14, 18);
+    doc.setFontSize(10); doc.setFont("helvetica","normal");
+    doc.text(`Período: ${periodo}`, 14, 25);
+    doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, 31);
+
+    let r = 0, de = 0;
+    dados.forEach(d => { if (d.tipo==="receita") r += d.valor; else de += d.valor; });
+
+    doc.setFontSize(9);
+    doc.text(`Total Receitas: ${formatBRL(r)}   |   Total Despesas: ${formatBRL(de)}   |   Saldo: ${formatBRL(r-de)}   |   Lançamentos: ${dados.length}`, 14, 38);
+
+    doc.autoTable({
+      startY: 44,
+      head: [["Data","Tipo","Categoria","Descrição","Forma Pagto","Responsável","Valor (R$)"]],
+      body: dados.map(d => [
+        formatDate(d.data),
+        d.tipo === "receita" ? "Receita" : "Despesa",
+        d.categoria || "—",
+        d.descricao,
+        d.formaPagamento || "—",
+        d.responsavel || "—",
+        formatBRL(d.valor)
+      ]),
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [26,39,68], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [245,246,248] },
+      columnStyles: { 6: { halign: "right" } },
+      didParseCell: data => {
+        if (data.column.index === 1 && data.section === "body") {
+          data.cell.styles.textColor = data.cell.text[0] === "Receita" ? [30,122,74] : [184,50,50];
+        }
+      }
+    });
+
+    const filename = `lancamentos_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+    setStatus("✅ PDF exportado com sucesso!", "success");
+  };
+
+  window.imprimirRelatorio = async function() {
+    await fetchDados();
+    window.print();
+  };
+
+  function setStatus(msg, type) {
+    const el = document.getElementById("exp-status");
+    el.textContent = msg;
+    el.className = `alert alert-${type}`;
+    setTimeout(() => { el.className = "alert hidden"; }, 5000);
+  }
+
+  // Auto-preview on filter change
+  ["exp-tipo","exp-mes","exp-ano"].forEach(id => {
+    document.getElementById(id).addEventListener("change", fetchDados);
+  });
+
+  fetchDados();
+</script>
+</body>
+</html>

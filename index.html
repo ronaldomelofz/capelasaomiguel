@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Livro Razão — Paróquia</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+</head>
+<body class="login-body">
+
+  <div class="login-container">
+    <div class="login-brand">
+      <div class="login-cross">✝</div>
+      <h1>Livro Razão</h1>
+      <p>Gestão Financeira da Paróquia</p>
+    </div>
+
+    <div class="login-card">
+      <h2>Acesso ao Sistema</h2>
+
+      <div id="login-error" class="alert alert-error hidden"></div>
+
+      <div class="form-group">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" placeholder="seu@email.com" autocomplete="email" />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Senha</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <button class="btn btn-primary btn-block" id="btn-login" onclick="doLogin()">
+        <span id="btn-login-text">Entrar</span>
+        <span id="btn-login-loading" class="hidden">Aguarde...</span>
+      </button>
+
+      <div class="login-links">
+        <a href="#" onclick="doPasswordReset()">Esqueceu a senha?</a>
+      </div>
+    </div>
+
+    <div class="login-footer">
+      <small>Sistema seguro com Firebase Authentication</small>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { FIREBASE_CONFIG } from "./js/config.js";
+
+    const app = initializeApp(FIREBASE_CONFIG);
+    const auth = getAuth(app);
+
+    // Redirect if already logged in
+    onAuthStateChanged(auth, user => {
+      if (user) window.location.href = "pages/dashboard.html";
+    });
+
+    window.doLogin = async function() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const err = document.getElementById("login-error");
+      const btnText = document.getElementById("btn-login-text");
+      const btnLoad = document.getElementById("btn-login-loading");
+
+      err.classList.add("hidden");
+      btnText.classList.add("hidden");
+      btnLoad.classList.remove("hidden");
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        window.location.href = "pages/dashboard.html";
+      } catch (e) {
+        let msg = "Erro ao fazer login.";
+        if (e.code === "auth/user-not-found" || e.code === "auth/wrong-password" || e.code === "auth/invalid-credential")
+          msg = "E-mail ou senha inválidos.";
+        else if (e.code === "auth/too-many-requests")
+          msg = "Muitas tentativas. Aguarde um momento.";
+        err.textContent = msg;
+        err.classList.remove("hidden");
+      } finally {
+        btnText.classList.remove("hidden");
+        btnLoad.classList.add("hidden");
+      }
+    };
+
+    window.doPasswordReset = async function() {
+      const email = document.getElementById("email").value.trim();
+      if (!email) { alert("Digite seu e-mail primeiro."); return; }
+      try {
+        await sendPasswordResetEmail(auth, email);
+        alert("E-mail de recuperação enviado!");
+      } catch (e) {
+        alert("Erro: verifique o e-mail informado.");
+      }
+    };
+
+    // Enter key
+    document.getElementById("password").addEventListener("keydown", e => {
+      if (e.key === "Enter") doLogin();
+    });
+  </script>
+</body>
+</html>

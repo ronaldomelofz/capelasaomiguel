@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lançamentos — Livro Razão</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">📒 Lançamentos</span>
+  <div class="topbar-actions">
+    <a href="novo.html" class="btn btn-success admin-only">+ Novo</a>
+  </div>
+</div>
+
+<div class="page-body">
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label>Tipo</label>
+      <select id="f-tipo">
+        <option value="">Todos</option>
+        <option value="receita">Receita</option>
+        <option value="despesa">Despesa</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Mês</label>
+      <select id="f-mes">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Ano</label>
+      <select id="f-ano"></select>
+    </div>
+    <div class="filter-group">
+      <label>Categoria</label>
+      <select id="f-cat"><option value="">Todas</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Buscar</label>
+      <input type="text" id="f-busca" placeholder="Descrição..." style="min-width:160px;" />
+    </div>
+    <button class="btn btn-primary" onclick="applyFilters()">🔍 Filtrar</button>
+    <button class="btn btn-outline" onclick="resetFilters()">↺ Limpar</button>
+  </div>
+
+  <!-- Summary -->
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:1rem;">
+    <div class="kpi-tile receita"><div class="kpi-label">Receitas filtradas</div><div class="kpi-value" id="sum-receita" style="font-size:1.3rem">R$ 0,00</div></div>
+    <div class="kpi-tile despesa"><div class="kpi-label">Despesas filtradas</div><div class="kpi-value" id="sum-despesa" style="font-size:1.3rem">R$ 0,00</div></div>
+    <div class="kpi-tile saldo"><div class="kpi-label">Saldo filtrado</div><div class="kpi-value" id="sum-saldo" style="font-size:1.3rem">R$ 0,00</div></div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th>
+            <th>Forma Pagto</th><th>Responsável</th><th class="text-right">Valor</th>
+            <th class="text-center">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-lanc">
+          <tr><td colspan="8" class="text-center text-muted" style="padding:2rem">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <div class="pagination-info" id="pag-info"></div>
+      <div class="pagination-controls" id="pag-controls"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="modal-detalhe">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Detalhes do Lançamento</h3>
+      <button class="modal-close" onclick="closeModal('modal-detalhe')">×</button>
+    </div>
+    <div class="modal-body" id="modal-detalhe-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm admin-only" id="btn-excluir" onclick="excluirLancamento()">🗑 Excluir</button>
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-detalhe')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { requireAuth, isAdmin, getDB, formatBRL, formatDate, formatDatetime } from "../js/auth.js";
+  import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA } from "../js/config.js";
+  import { renderLayout } from "../js/layout.js";
+  import { collection, query, where, orderBy, getDocs, deleteDoc, doc }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  renderLayout("lancamentos");
+  const { user, profile } = await requireAuth();
+  const db = getDB();
+  const admin = isAdmin(profile);
+
+  let allDocs = [];
+  let filtered = [];
+  let currentPage = 1;
+  const PAGE_SIZE = 20;
+  let selectedId = null;
+
+  // Fill selects
+  const now = new Date();
+  const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const mesEl = document.getElementById("f-mes");
+  meses.forEach((m,i) => { const o = document.createElement("option"); o.value = i+1; o.textContent = m; mesEl.appendChild(o); });
+  mesEl.value = now.getMonth() + 1;
+  const anoEl = document.getElementById("f-ano");
+  for (let y = now.getFullYear(); y >= now.getFullYear()-5; y--) {
+    const o = document.createElement("option"); o.value = y; o.textContent = y; anoEl.appendChild(o);
+  }
+
+  const cats = [...CATEGORIAS_RECEITA, ...CATEGORIAS_DESPESA].sort();
+  const catEl = document.getElementById("f-cat");
+  cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catEl.appendChild(o); });
+
+  async function loadAll() {
+    const snap = await getDocs(query(collection(db, "lancamentos"), orderBy("data", "desc")));
+    allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    applyFilters();
+  }
+
+  window.applyFilters = function() {
+    const tipo   = document.getElementById("f-tipo").value;
+    const mes    = document.getElementById("f-mes").value;
+    const ano    = document.getElementById("f-ano").value;
+    const cat    = document.getElementById("f-cat").value;
+    const busca  = document.getElementById("f-busca").value.toLowerCase();
+
+    filtered = allDocs.filter(d => {
+      if (tipo && d.tipo !== tipo) return false;
+      if (mes && d.mes !== +mes) return false;
+      if (ano && d.ano !== +ano) return false;
+      if (cat && d.categoria !== cat) return false;
+      if (busca && !d.descricao?.toLowerCase().includes(busca)) return false;
+      return true;
+    });
+
+    // Summaries
+    let r = 0, de = 0;
+    filtered.forEach(d => { if (d.tipo === "receita") r += d.valor; else de += d.valor; });
+    document.getElementById("sum-receita").textContent = formatBRL(r);
+    document.getElementById("sum-despesa").textContent = formatBRL(de);
+    const sl = r - de;
+    const slEl = document.getElementById("sum-saldo");
+    slEl.textContent = formatBRL(sl);
+    slEl.className = "kpi-value " + (sl >= 0 ? "saldo-positivo" : "saldo-negativo");
+    slEl.style.fontSize = "1.3rem";
+
+    currentPage = 1;
+    renderPage();
+  };
+
+  window.resetFilters = function() {
+    document.getElementById("f-tipo").value = "";
+    document.getElementById("f-mes").value = "";
+    document.getElementById("f-ano").value = "";
+    document.getElementById("f-cat").value = "";
+    document.getElementById("f-busca").value = "";
+    filtered = [...allDocs];
+    currentPage = 1;
+    renderPage();
+  };
+
+  function renderPage() {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const page  = filtered.slice(start, start + PAGE_SIZE);
+    const tbody = document.getElementById("tbody-lanc");
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">📭</div><h4>Nenhum lançamento encontrado</h4><p>Ajuste os filtros ou cadastre novos lançamentos.</p></div></td></tr>`;
+      document.getElementById("pag-info").textContent = "";
+      document.getElementById("pag-controls").innerHTML = "";
+      return;
+    }
+
+    tbody.innerHTML = page.map(d => `
+      <tr>
+        <td>${formatDate(d.data)}</td>
+        <td><span class="badge badge-${d.tipo}">${d.tipo === "receita" ? "Receita" : "Despesa"}</span></td>
+        <td>${d.categoria || "—"}</td>
+        <td>${d.descricao}</td>
+        <td>${d.formaPagamento || "—"}</td>
+        <td>${d.responsavel || "—"}</td>
+        <td class="text-right val-${d.tipo}">${formatBRL(d.valor)}</td>
+        <td class="text-center">
+          <button class="btn btn-outline btn-sm" onclick="openDetalhe('${d.id}')">👁 Ver</button>
+        </td>
+      </tr>`).join("");
+
+    // Pagination
+    const total = filtered.length;
+    const pages = Math.ceil(total / PAGE_SIZE);
+    document.getElementById("pag-info").textContent = `Exibindo ${start+1}–${Math.min(start+PAGE_SIZE, total)} de ${total} registros`;
+    let pHTML = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?"disabled":""}>‹</button>`;
+    for (let p = Math.max(1, currentPage-2); p <= Math.min(pages, currentPage+2); p++) {
+      pHTML += `<button class="page-btn ${p===currentPage?"active":""}" onclick="goPage(${p})">${p}</button>`;
+    }
+    pHTML += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?"disabled":""}>›</button>`;
+    document.getElementById("pag-controls").innerHTML = pHTML;
+  }
+
+  window.goPage = function(p) { currentPage = p; renderPage(); };
+
+  window.openDetalhe = function(id) {
+    const d = allDocs.find(x => x.id === id);
+    if (!d) return;
+    selectedId = id;
+
+    const excluirBtn = document.getElementById("btn-excluir");
+    if (excluirBtn) excluirBtn.style.display = admin ? "inline-flex" : "none";
+
+    document.getElementById("modal-detalhe-body").innerHTML = `
+      <div style="display:grid;gap:.75rem;">
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+          <div><strong>Tipo:</strong> <span class="badge badge-${d.tipo}">${d.tipo === "receita" ? "Receita" : "Despesa"}</span></div>
+          <div><strong>Data:</strong> ${formatDate(d.data)}</div>
+          <div><strong>Valor:</strong> <span class="val-${d.tipo}">${formatBRL(d.valor)}</span></div>
+        </div>
+        <div><strong>Categoria:</strong> ${d.categoria || "—"}</div>
+        <div><strong>Descrição:</strong> ${d.descricao}</div>
+        <div><strong>Forma de Pagamento:</strong> ${d.formaPagamento || "—"}</div>
+        <div><strong>Responsável:</strong> ${d.responsavel || "—"}</div>
+        <div><strong>Nº Documento:</strong> ${d.numeroDocumento || "—"}</div>
+        ${d.observacoes ? `<div><strong>Observações:</strong><br/><em style="color:var(--text-muted)">${d.observacoes}</em></div>` : ""}
+        <hr style="border:none;border-top:1px solid var(--border)"/>
+        <div style="font-size:.8rem;color:var(--text-muted)">
+          <div>Cadastrado por: ${d.criadoPorEmail || "—"}</div>
+          <div>Em: ${d.criadoEm ? formatDatetime(d.criadoEm) : "—"}</div>
+        </div>
+      </div>`;
+    document.getElementById("modal-detalhe").classList.add("open");
+  };
+
+  window.excluirLancamento = async function() {
+    if (!selectedId) return;
+    if (!confirm("Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.")) return;
+    try {
+      await deleteDoc(doc(db, "lancamentos", selectedId));
+      allDocs = allDocs.filter(d => d.id !== selectedId);
+      closeModal("modal-detalhe");
+      applyFilters();
+      alert("Lançamento excluído com sucesso.");
+    } catch (e) {
+      alert("Erro ao excluir: " + e.message);
+    }
+  };
+
+  window.closeModal = id => document.getElementById(id).classList.remove("open");
+
+  // Enter to filter
+  document.getElementById("f-busca").addEventListener("keydown", e => { if (e.key === "Enter") applyFilters(); });
+
+  loadAll();
+</script>
+</body>
+</html>

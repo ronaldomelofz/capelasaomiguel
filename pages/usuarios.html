@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Usuários — Livro Razão</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">👥 Gerenciar Usuários</span>
+  <div class="topbar-actions">
+    <button class="btn btn-success" onclick="openModal('modal-novo-user')">+ Novo Usuário</button>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="alert alert-info mb-2">
+    ℹ️ <strong>Admin:</strong> pode criar, editar e excluir lançamentos, gerenciar usuários e categorias.
+    <strong>Visualizador:</strong> pode apenas consultar e exportar dados.
+  </div>
+
+  <div id="user-alert" class="alert hidden"></div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Usuários Cadastrados</span></div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Cadastrado em</th><th class="text-center">Ações</th></tr>
+        </thead>
+        <tbody id="tbody-users">
+          <tr><td colspan="5" class="text-center text-muted" style="padding:2rem">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo Usuário -->
+<div class="modal-overlay" id="modal-novo-user">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-user-title">Novo Usuário</h3>
+      <button class="modal-close" onclick="closeModal('modal-novo-user')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-alert" class="alert hidden"></div>
+      <div class="form-group">
+        <label>Nome *</label>
+        <input type="text" id="u-nome" placeholder="Nome completo" />
+      </div>
+      <div class="form-group">
+        <label>E-mail *</label>
+        <input type="email" id="u-email" placeholder="email@exemplo.com" />
+      </div>
+      <div class="form-group">
+        <label>Senha (mínimo 6 caracteres) *</label>
+        <input type="password" id="u-senha" placeholder="Senha de acesso" />
+      </div>
+      <div class="form-group">
+        <label>Perfil de Acesso *</label>
+        <select id="u-perfil">
+          <option value="visualizador">Visualizador</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <input type="text" id="u-obs" placeholder="Ex: Tesoureiro, Pároco..." />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-novo-user')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarUsuario()" id="btn-criar-user">Criar Usuário</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Perfil -->
+<div class="modal-overlay" id="modal-edit-user">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Editar Perfil de Acesso</h3>
+      <button class="modal-close" onclick="closeModal('modal-edit-user')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nome</label>
+        <input type="text" id="eu-nome" />
+      </div>
+      <div class="form-group">
+        <label>Perfil</label>
+        <select id="eu-perfil">
+          <option value="visualizador">Visualizador</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <input type="text" id="eu-obs" />
+      </div>
+      <input type="hidden" id="eu-uid" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-edit-user')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEdicaoUser()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { requireAuth, isAdmin, getDB, formatDatetime } from "../js/auth.js";
+  import { PERFIS } from "../js/config.js";
+  import { FIREBASE_CONFIG } from "../js/config.js";
+  import { renderLayout } from "../js/layout.js";
+  import { collection, getDocs, setDoc, deleteDoc, doc, serverTimestamp, getDoc }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  renderLayout("usuarios");
+  const { user, profile } = await requireAuth();
+
+  if (!isAdmin(profile)) {
+    document.querySelector(".page-body").innerHTML = `<div class="alert alert-error">⛔ Acesso negado. Apenas administradores podem gerenciar usuários.</div>`;
+    throw new Error("Acesso negado");
+  }
+
+  const db = getDB();
+  let users = [];
+
+  async function loadUsers() {
+    const snap = await getDocs(collection(db, "usuarios"));
+    users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById("tbody-users");
+    if (!users.length) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">👤</div><h4>Nenhum usuário cadastrado</h4></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td><strong>${u.nome || "—"}</strong>${u.observacoes ? `<br/><small class="text-muted">${u.observacoes}</small>` : ""}</td>
+        <td>${u.email || "—"}</td>
+        <td><span class="role-badge ${u.perfil === "admin" ? "badge-admin" : "badge-viewer"}">${u.perfil === "admin" ? "Admin" : "Visualizador"}</span></td>
+        <td>${u.criadoEm ? formatDatetime(u.criadoEm) : "—"}</td>
+        <td class="text-center">
+          <button class="btn btn-outline btn-sm" onclick="editarUser('${u.uid}')">✏️ Editar</button>
+          ${u.uid !== user.uid ? `<button class="btn btn-danger btn-sm" onclick="excluirUser('${u.uid}')">🗑</button>` : ""}
+        </td>
+      </tr>`).join("");
+  }
+
+  window.openModal  = id => document.getElementById(id).classList.add("open");
+  window.closeModal = id => document.getElementById(id).classList.remove("open");
+
+  window.criarUsuario = async function() {
+    const nome   = document.getElementById("u-nome").value.trim();
+    const email  = document.getElementById("u-email").value.trim();
+    const senha  = document.getElementById("u-senha").value;
+    const perfil = document.getElementById("u-perfil").value;
+    const obs    = document.getElementById("u-obs").value.trim();
+    const malert = document.getElementById("modal-alert");
+
+    malert.className = "alert hidden";
+    if (!nome || !email || !senha) {
+      malert.textContent = "Preencha todos os campos obrigatórios.";
+      malert.className = "alert alert-error"; return;
+    }
+    if (senha.length < 6) {
+      malert.textContent = "A senha deve ter pelo menos 6 caracteres.";
+      malert.className = "alert alert-error"; return;
+    }
+
+    const btn = document.getElementById("btn-criar-user");
+    btn.disabled = true; btn.textContent = "Criando...";
+
+    try {
+      // Use secondary app instance to create user without signing out current admin
+      const secondaryApp = initializeApp(FIREBASE_CONFIG, "secondary_" + Date.now());
+      const secondaryAuth = getAuth(secondaryApp);
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
+      const newUid = cred.user.uid;
+      await secondaryAuth.signOut();
+
+      await setDoc(doc(db, "usuarios", newUid), {
+        nome, email, perfil, observacoes: obs || null,
+        criadoEm: serverTimestamp(), criadoPor: user.uid
+      });
+
+      closeModal("modal-novo-user");
+      setAlert("user-alert", "✅ Usuário criado com sucesso!", "success");
+      document.getElementById("u-nome").value = "";
+      document.getElementById("u-email").value = "";
+      document.getElementById("u-senha").value = "";
+      document.getElementById("u-obs").value = "";
+      await loadUsers();
+    } catch(e) {
+      let msg = "Erro ao criar usuário.";
+      if (e.code === "auth/email-already-in-use") msg = "Este e-mail já está em uso.";
+      malert.textContent = msg; malert.className = "alert alert-error";
+    } finally {
+      btn.disabled = false; btn.textContent = "Criar Usuário";
+    }
+  };
+
+  window.editarUser = function(uid) {
+    const u = users.find(x => x.uid === uid);
+    if (!u) return;
+    document.getElementById("eu-uid").value = uid;
+    document.getElementById("eu-nome").value = u.nome || "";
+    document.getElementById("eu-perfil").value = u.perfil || "visualizador";
+    document.getElementById("eu-obs").value = u.observacoes || "";
+    openModal("modal-edit-user");
+  };
+
+  window.salvarEdicaoUser = async function() {
+    const uid = document.getElementById("eu-uid").value;
+    const nome = document.getElementById("eu-nome").value.trim();
+    const perfil = document.getElementById("eu-perfil").value;
+    const obs = document.getElementById("eu-obs").value.trim();
+    try {
+      await setDoc(doc(db, "usuarios", uid), { nome, perfil, observacoes: obs||null }, { merge: true });
+      closeModal("modal-edit-user");
+      setAlert("user-alert", "✅ Usuário atualizado!", "success");
+      await loadUsers();
+    } catch(e) { alert("Erro: " + e.message); }
+  };
+
+  window.excluirUser = async function(uid) {
+    if (uid === user.uid) { alert("Você não pode excluir sua própria conta."); return; }
+    if (!confirm("Excluir este usuário? O acesso será removido.")) return;
+    try {
+      await deleteDoc(doc(db, "usuarios", uid));
+      setAlert("user-alert", "✅ Usuário removido.", "success");
+      await loadUsers();
+    } catch(e) { alert("Erro: " + e.message); }
+  };
+
+  function setAlert(id, msg, type) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.className = `alert alert-${type}`;
+    setTimeout(() => { el.className = "alert hidden"; }, 5000);
+  }
+
+  loadUsers();
+</script>
+</body>
+</html>

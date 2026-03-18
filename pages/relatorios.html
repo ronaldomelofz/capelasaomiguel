@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relatórios — Livro Razão</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">📈 Relatórios</span>
+</div>
+
+<div class="page-body">
+
+  <!-- Period selector -->
+  <div class="card mb-2">
+    <div class="card-header"><span class="card-title">Período do Relatório</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+      <div class="form-group" style="margin:0">
+        <label>Tipo de Relatório</label>
+        <select id="rel-tipo" onchange="renderReport()">
+          <option value="mensal">Mensal</option>
+          <option value="anual">Anual</option>
+          <option value="categoria">Por Categoria</option>
+          <option value="comparativo">Comparativo Mensal</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0" id="sel-mes-wrap">
+        <label>Mês</label>
+        <select id="rel-mes"></select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Ano</label>
+        <select id="rel-ano"></select>
+      </div>
+      <button class="btn btn-primary" onclick="renderReport()">📊 Gerar Relatório</button>
+    </div>
+  </div>
+
+  <div id="report-container"></div>
+</div>
+
+<script type="module">
+  import { requireAuth, getDB, formatBRL, formatDate, getMonthName } from "../js/auth.js";
+  import { renderLayout } from "../js/layout.js";
+  import { collection, query, where, orderBy, getDocs }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  renderLayout("relatorios");
+  await requireAuth();
+  const db = getDB();
+
+  const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const now = new Date();
+
+  const mesEl = document.getElementById("rel-mes");
+  meses.forEach((m,i) => { const o = document.createElement("option"); o.value=i+1; o.textContent=m; mesEl.appendChild(o); });
+  mesEl.value = now.getMonth() + 1;
+
+  const anoEl = document.getElementById("rel-ano");
+  for (let y = now.getFullYear(); y >= now.getFullYear()-5; y--) {
+    const o = document.createElement("option"); o.value=y; o.textContent=y; anoEl.appendChild(o);
+  }
+
+  document.getElementById("rel-tipo").addEventListener("change", function() {
+    document.getElementById("sel-mes-wrap").style.display =
+      (this.value === "anual" || this.value === "comparativo") ? "none" : "";
+  });
+
+  let chartInst = null;
+
+  async function fetchPeriod(mes, ano) {
+    const start = `${ano}-${String(mes).padStart(2,"0")}-01`;
+    const end   = `${ano}-${String(mes).padStart(2,"0")}-31`;
+    const snap  = await getDocs(query(collection(db,"lancamentos"),
+      where("data",">=",start), where("data","<=",end), orderBy("data")));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  async function fetchYear(ano) {
+    const snap = await getDocs(query(collection(db,"lancamentos"),
+      where("ano","==",+ano), orderBy("data")));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  window.renderReport = async function() {
+    const tipo = document.getElementById("rel-tipo").value;
+    const mes  = +document.getElementById("rel-mes").value;
+    const ano  = +document.getElementById("rel-ano").value;
+    const cont = document.getElementById("report-container");
+    cont.innerHTML = `<div class="card text-center" style="padding:2.5rem;color:var(--text-muted)">⏳ Gerando relatório...</div>`;
+
+    if (chartInst) { chartInst.destroy(); chartInst = null; }
+
+    let docs = tipo === "anual" || tipo === "comparativo"
+      ? await fetchYear(ano)
+      : await fetchPeriod(mes, ano);
+
+    if (tipo === "mensal") renderMensal(docs, mes, ano, cont);
+    else if (tipo === "anual") renderAnual(docs, ano, cont);
+    else if (tipo === "categoria") renderCategoria(docs, mes, ano, cont);
+    else if (tipo === "comparativo") renderComparativo(docs, ano, cont);
+  };
+
+  function sumStats(docs) {
+    let r = 0, d = 0;
+    docs.forEach(x => { if (x.tipo === "receita") r += x.valor; else d += x.valor; });
+    return { receita: r, despesa: d, saldo: r - d };
+  }
+
+  function renderMensal(docs, mes, ano, cont) {
+    const { receita, despesa, saldo } = sumStats(docs);
+    const rows = docs.map(d => `
+      <tr>
+        <td>${formatDate(d.data)}</td>
+        <td><span class="badge badge-${d.tipo}">${d.tipo==="receita"?"Receita":"Despesa"}</span></td>
+        <td>${d.categoria||"—"}</td>
+        <td>${d.descricao}</td>
+        <td>${d.formaPagamento||"—"}</td>
+        <td class="text-right val-${d.tipo}">${formatBRL(d.valor)}</td>
+      </tr>`).join("") || `<tr><td colspan="6" class="text-center text-muted" style="padding:1.5rem">Nenhum lançamento</td></tr>`;
+
+    cont.innerHTML = `
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:1rem;">
+        <div class="kpi-tile receita"><div class="kpi-label">Receitas</div><div class="kpi-value" style="font-size:1.4rem">${formatBRL(receita)}</div></div>
+        <div class="kpi-tile despesa"><div class="kpi-label">Despesas</div><div class="kpi-value" style="font-size:1.4rem">${formatBRL(despesa)}</div></div>
+        <div class="kpi-tile saldo"><div class="kpi-label">Saldo</div><div class="kpi-value ${saldo>=0?"saldo-positivo":"saldo-negativo"}" style="font-size:1.4rem">${formatBRL(saldo)}</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Relatório Mensal — ${meses[mes-1]} ${ano}</span>
+          <span class="text-muted" style="font-size:.85rem">${docs.length} lançamentos</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Forma Pagto</th><th class="text-right">Valor</th></tr></thead>
+            <tbody>${rows}</tbody>
+            <tfoot>
+              <tr style="background:#f9fafc;font-weight:700;">
+                <td colspan="5">TOTAL DO MÊS</td>
+                <td class="text-right ${saldo>=0?"val-receita":"val-despesa"}">${formatBRL(saldo)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  function renderAnual(docs, ano, cont) {
+    const byMonth = {};
+    for (let m = 1; m <= 12; m++) byMonth[m] = { receita: 0, despesa: 0, count: 0 };
+    docs.forEach(d => {
+      if (byMonth[d.mes]) {
+        if (d.tipo === "receita") byMonth[d.mes].receita += d.valor;
+        else byMonth[d.mes].despesa += d.valor;
+        byMonth[d.mes].count++;
+      }
+    });
+    const { receita, despesa, saldo } = sumStats(docs);
+
+    const rows = Object.entries(byMonth).map(([m, v]) => {
+      const sl = v.receita - v.despesa;
+      return `<tr>
+        <td>${meses[+m-1]}</td>
+        <td class="val-receita">${formatBRL(v.receita)}</td>
+        <td class="val-despesa">${formatBRL(v.despesa)}</td>
+        <td class="${sl>=0?"val-receita":"val-despesa"}">${formatBRL(sl)}</td>
+        <td>${v.count}</td>
+      </tr>`;
+    }).join("");
+
+    cont.innerHTML = `
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:1rem;">
+        <div class="kpi-tile receita"><div class="kpi-label">Receitas Anuais</div><div class="kpi-value" style="font-size:1.3rem">${formatBRL(receita)}</div></div>
+        <div class="kpi-tile despesa"><div class="kpi-label">Despesas Anuais</div><div class="kpi-value" style="font-size:1.3rem">${formatBRL(despesa)}</div></div>
+        <div class="kpi-tile saldo"><div class="kpi-label">Saldo Anual</div><div class="kpi-value ${saldo>=0?"saldo-positivo":"saldo-negativo"}" style="font-size:1.3rem">${formatBRL(saldo)}</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Relatório Anual — ${ano}</span></div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th><th>Lançamentos</th></tr></thead>
+            <tbody>${rows}</tbody>
+            <tfoot>
+              <tr style="background:#f9fafc;font-weight:700;">
+                <td>TOTAL ANUAL</td>
+                <td class="val-receita">${formatBRL(receita)}</td>
+                <td class="val-despesa">${formatBRL(despesa)}</td>
+                <td class="${saldo>=0?"val-receita":"val-despesa"}">${formatBRL(saldo)}</td>
+                <td>${docs.length}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="card mt-2">
+        <div class="card-header"><span class="card-title">Evolução Mensal ${ano}</span></div>
+        <div class="chart-container"><canvas id="chart-anual"></canvas></div>
+      </div>`;
+
+    const labels = meses.map(m => m.slice(0,3));
+    const rData = Object.values(byMonth).map(v => v.receita);
+    const dData = Object.values(byMonth).map(v => v.despesa);
+    chartInst = new Chart(document.getElementById("chart-anual"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          { label: "Receitas", data: rData, borderColor: "#1e7a4a", backgroundColor: "rgba(30,122,74,.1)", tension: .3, fill: true },
+          { label: "Despesas", data: dData, borderColor: "#b83232", backgroundColor: "rgba(184,50,50,.1)", tension: .3, fill: true }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        scales: { y: { ticks: { callback: v => "R$ " + v.toLocaleString("pt-BR") } } } }
+    });
+  }
+
+  function renderCategoria(docs, mes, ano, cont) {
+    const cats = {};
+    docs.forEach(d => {
+      if (!cats[d.tipo]) cats[d.tipo] = {};
+      cats[d.tipo][d.categoria] = (cats[d.tipo][d.categoria] || 0) + d.valor;
+    });
+
+    const makeRows = (tipo) => {
+      const data = cats[tipo] || {};
+      const total = Object.values(data).reduce((a,b)=>a+b, 0);
+      return Object.entries(data).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => `
+        <tr>
+          <td>${cat}</td>
+          <td class="text-right">${formatBRL(val)}</td>
+          <td class="text-right">${total ? ((val/total)*100).toFixed(1) : "0"}%</td>
+          <td>
+            <div style="background:var(--border);border-radius:4px;height:8px;">
+              <div style="background:${tipo==="receita"?"var(--green)":"var(--red)"};height:8px;border-radius:4px;width:${total?Math.round((val/total)*100):0}%"></div>
+            </div>
+          </td>
+        </tr>`).join("");
+    };
+
+    const { receita, despesa } = sumStats(docs);
+
+    cont.innerHTML = `
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Receitas por Categoria — ${meses[mes-1]} ${ano}</span></div>
+          <div class="table-wrapper">
+            <table><thead><tr><th>Categoria</th><th class="text-right">Valor</th><th class="text-right">%</th><th>Participação</th></tr></thead>
+            <tbody>${makeRows("receita") || "<tr><td colspan='4' class='text-center text-muted'>Sem dados</td></tr>"}</tbody>
+            <tfoot><tr style="font-weight:700"><td>TOTAL</td><td class="text-right val-receita">${formatBRL(receita)}</td><td></td><td></td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Despesas por Categoria — ${meses[mes-1]} ${ano}</span></div>
+          <div class="table-wrapper">
+            <table><thead><tr><th>Categoria</th><th class="text-right">Valor</th><th class="text-right">%</th><th>Participação</th></tr></thead>
+            <tbody>${makeRows("despesa") || "<tr><td colspan='4' class='text-center text-muted'>Sem dados</td></tr>"}</tbody>
+            <tfoot><tr style="font-weight:700"><td>TOTAL</td><td class="text-right val-despesa">${formatBRL(despesa)}</td><td></td><td></td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderComparativo(docs, ano, cont) {
+    // Group by month
+    const byMonth = {};
+    for (let m = 1; m <= 12; m++) byMonth[m] = [];
+    docs.forEach(d => { if (byMonth[d.mes]) byMonth[d.mes].push(d); });
+
+    const rows = Object.entries(byMonth).map(([m, ds]) => {
+      const { receita, despesa, saldo } = sumStats(ds);
+      return `<tr>
+        <td>${meses[+m-1]}</td>
+        <td class="text-right val-receita">${formatBRL(receita)}</td>
+        <td class="text-right val-despesa">${formatBRL(despesa)}</td>
+        <td class="text-right ${saldo>=0?"val-receita":"val-despesa"}">${formatBRL(saldo)}</td>
+        <td class="text-right">${((saldo/Math.max(receita,1))*100).toFixed(1)}%</td>
+      </tr>`;
+    }).join("");
+
+    const { receita, despesa, saldo } = sumStats(docs);
+
+    cont.innerHTML = `
+      <div class="card">
+        <div class="card-header"><span class="card-title">Comparativo Mensal — ${ano}</span></div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Mês</th><th class="text-right">Receitas</th><th class="text-right">Despesas</th><th class="text-right">Saldo</th><th class="text-right">Margem</th></tr></thead>
+            <tbody>${rows}</tbody>
+            <tfoot>
+              <tr style="background:#f9fafc;font-weight:700;">
+                <td>ANUAL</td>
+                <td class="text-right val-receita">${formatBRL(receita)}</td>
+                <td class="text-right val-despesa">${formatBRL(despesa)}</td>
+                <td class="text-right ${saldo>=0?"val-receita":"val-despesa"}">${formatBRL(saldo)}</td>
+                <td class="text-right">${((saldo/Math.max(receita,1))*100).toFixed(1)}%</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  renderReport();
+</script>
+</body>
+</html>

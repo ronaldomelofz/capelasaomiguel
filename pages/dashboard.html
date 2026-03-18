@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Livro Razão</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">📊 Dashboard</span>
+  <div class="topbar-actions">
+    <select id="sel-mes" class="form-group" style="margin:0;padding:.45rem .7rem;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-sans);font-size:.85rem;"></select>
+    <select id="sel-ano" class="form-group" style="margin:0;padding:.45rem .7rem;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-sans);font-size:.85rem;"></select>
+    <a href="novo.html" class="btn btn-success admin-only">+ Novo Lançamento</a>
+  </div>
+</div>
+
+<div class="page-body">
+  <div id="dash-alert" class="alert alert-info hidden"></div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-tile receita">
+      <div class="kpi-label">Receitas do Mês</div>
+      <div class="kpi-value" id="kpi-receita">R$ —</div>
+      <div class="kpi-sub" id="kpi-receita-count">— lançamentos</div>
+    </div>
+    <div class="kpi-tile despesa">
+      <div class="kpi-label">Despesas do Mês</div>
+      <div class="kpi-value" id="kpi-despesa">R$ —</div>
+      <div class="kpi-sub" id="kpi-despesa-count">— lançamentos</div>
+    </div>
+    <div class="kpi-tile saldo">
+      <div class="kpi-label">Saldo do Mês</div>
+      <div class="kpi-value" id="kpi-saldo">R$ —</div>
+      <div class="kpi-sub" id="kpi-saldo-status">—</div>
+    </div>
+    <div class="kpi-tile lancamentos">
+      <div class="kpi-label">Total Lançamentos</div>
+      <div class="kpi-value" id="kpi-total">—</div>
+      <div class="kpi-sub">no período selecionado</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="chart-grid">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Receitas × Despesas (12 meses)</span></div>
+      <div class="chart-container"><canvas id="chart-barras"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Despesas por Categoria</span></div>
+      <div class="chart-container"><canvas id="chart-pizza"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Recent transactions -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Últimos Lançamentos</span>
+      <a href="lancamentos.html" class="btn btn-outline btn-sm">Ver todos →</a>
+    </div>
+    <div class="table-wrapper">
+      <table id="tbl-recentes">
+        <thead>
+          <tr>
+            <th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th class="text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-recentes">
+          <tr><td colspan="5" class="text-center text-muted" style="padding:2rem">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { requireAuth, formatBRL, formatDate, getDB } from "../js/auth.js";
+  import { renderLayout } from "../js/layout.js";
+  import { collection, query, where, orderBy, limit, getDocs }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  renderLayout("dashboard");
+
+  const { user, profile } = await requireAuth();
+  const db = getDB();
+
+  // Populate month/year selectors
+  const now = new Date();
+  let selMes = now.getMonth() + 1;
+  let selAno = now.getFullYear();
+
+  const mesEl = document.getElementById("sel-mes");
+  const anoEl = document.getElementById("sel-ano");
+  const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  meses.forEach((m, i) => { const o = document.createElement("option"); o.value = i+1; o.textContent = m; if (i+1 === selMes) o.selected = true; mesEl.appendChild(o); });
+  for (let y = selAno; y >= selAno - 5; y--) { const o = document.createElement("option"); o.value = y; o.textContent = y; anoEl.appendChild(o); }
+
+  mesEl.addEventListener("change", () => { selMes = +mesEl.value; loadDashboard(); });
+  anoEl.addEventListener("change", () => { selAno = +anoEl.value; loadDashboard(); });
+
+  let chartBarras, chartPizza;
+
+  async function loadDashboard() {
+    const start = `${selAno}-${String(selMes).padStart(2,"0")}-01`;
+    const end   = `${selAno}-${String(selMes).padStart(2,"0")}-31`;
+
+    const snap = await getDocs(query(
+      collection(db, "lancamentos"),
+      where("data", ">=", start),
+      where("data", "<=", end),
+      orderBy("data", "desc")
+    ));
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    let totalR = 0, totalD = 0, cntR = 0, cntD = 0;
+    const catMap = {};
+    docs.forEach(d => {
+      if (d.tipo === "receita") { totalR += d.valor; cntR++; }
+      else { totalD += d.valor; cntD++; catMap[d.categoria] = (catMap[d.categoria]||0) + d.valor; }
+    });
+
+    document.getElementById("kpi-receita").textContent = formatBRL(totalR);
+    document.getElementById("kpi-receita-count").textContent = `${cntR} lançamento${cntR !== 1 ? "s" : ""}`;
+    document.getElementById("kpi-despesa").textContent = formatBRL(totalD);
+    document.getElementById("kpi-despesa-count").textContent = `${cntD} lançamento${cntD !== 1 ? "s" : ""}`;
+    const saldo = totalR - totalD;
+    const saldoEl = document.getElementById("kpi-saldo");
+    saldoEl.textContent = formatBRL(saldo);
+    saldoEl.className = "kpi-value " + (saldo >= 0 ? "saldo-positivo" : "saldo-negativo");
+    document.getElementById("kpi-saldo-status").textContent = saldo >= 0 ? "✅ Superávit" : "⚠️ Déficit";
+    document.getElementById("kpi-total").textContent = docs.length;
+
+    // Recent table
+    const tbody = document.getElementById("tbody-recentes");
+    const recent = docs.slice(0, 10);
+    if (recent.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">📭</div><h4>Nenhum lançamento</h4><p>Nenhum registro encontrado neste período.</p></div></td></tr>`;
+    } else {
+      tbody.innerHTML = recent.map(d => `
+        <tr>
+          <td>${formatDate(d.data)}</td>
+          <td><span class="badge badge-${d.tipo}">${d.tipo === "receita" ? "Receita" : "Despesa"}</span></td>
+          <td>${d.categoria || "—"}</td>
+          <td>${d.descricao}</td>
+          <td class="text-right val-${d.tipo}">${formatBRL(d.valor)}</td>
+        </tr>`).join("");
+    }
+
+    // Bar chart — 12 months
+    await loadBarChart();
+
+    // Pizza — categories
+    const labels = Object.keys(catMap);
+    const values = Object.values(catMap);
+    const colors = ["#1e7a4a","#b83232","#b8962e","#1a2744","#4a7fc1","#7a4ab8","#b87a4a","#4ab8a0","#b84a7a","#6b7394","#a0b84a","#4a9ab8"];
+
+    if (chartPizza) chartPizza.destroy();
+    chartPizza = new Chart(document.getElementById("chart-pizza"), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "right", labels: { font: { size: 11 }, boxWidth: 12 } } } }
+    });
+  }
+
+  async function loadBarChart() {
+    const months = [];
+    const receitas = [];
+    const despesas = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(selAno, selMes - 1 - i, 1);
+      const m = d.getMonth() + 1;
+      const y = d.getFullYear();
+      months.push(meses[m-1].slice(0,3) + "/" + String(y).slice(2));
+      const start = `${y}-${String(m).padStart(2,"0")}-01`;
+      const end   = `${y}-${String(m).padStart(2,"0")}-31`;
+      const snap = await getDocs(query(collection(db,"lancamentos"), where("data",">=",start), where("data","<=",end)));
+      let r = 0, de = 0;
+      snap.docs.forEach(d => { if (d.data().tipo === "receita") r += d.data().valor; else de += d.data().valor; });
+      receitas.push(r);
+      despesas.push(de);
+    }
+
+    if (chartBarras) chartBarras.destroy();
+    chartBarras = new Chart(document.getElementById("chart-barras"), {
+      type: "bar",
+      data: {
+        labels: months,
+        datasets: [
+          { label: "Receitas", data: receitas, backgroundColor: "#1e7a4a", borderRadius: 4 },
+          { label: "Despesas", data: despesas, backgroundColor: "#b83232", borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { font: { size: 11 } } } },
+        scales: {
+          y: { ticks: { callback: v => "R$ " + v.toLocaleString("pt-BR"), font: { size: 10 } } },
+          x: { ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>
