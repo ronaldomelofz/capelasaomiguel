@@ -5,12 +5,12 @@
 // ============================================================
 
 export const FIREBASE_CONFIG = {
-  apiKey:            "SUA_API_KEY_AQUI",
-  authDomain:        "SEU_PROJECT_ID.firebaseapp.com",
-  projectId:         "SEU_PROJECT_ID",
-  storageBucket:     "SEU_PROJECT_ID.appspot.com",
-  messagingSenderId: "SEU_MESSAGING_SENDER_ID",
-  appId:             "SEU_APP_ID"
+  "apiKey": "SUA_API_KEY_AQUI",
+  "authDomain": "SEU_PROJECT_ID.firebaseapp.com",
+  "projectId": "SEU_PROJECT_ID",
+  "storageBucket": "SEU_PROJECT_ID.appspot.com",
+  "messagingSenderId": "SEU_MESSAGING_SENDER_ID",
+  "appId": "SEU_APP_ID"
 };
 
 // ============================================================
@@ -19,8 +19,11 @@ export const FIREBASE_CONFIG = {
 //  E-mail: admin@capelasaomiguel.com | Senha: admin
 // ============================================================
 export const ADMIN_DEFAULT = {
-  email: "admin@capelasaomiguel.com",
-  usernames: ["admin", "administrador"]  // Aceita admin ou administrador no login
+  "email": "admin@capelasaomiguel.com",
+  "usernames": [
+    "admin",
+    "administrador"
+  ]
 };
 
 // ============================================================

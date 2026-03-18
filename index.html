@@ -29,7 +29,10 @@
 
       <div class="form-group">
         <label for="password">Senha</label>
-        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+        <div class="password-input-wrap">
+          <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+          <button type="button" class="btn-toggle-password" id="btn-toggle-password" onclick="togglePassword()" title="Mostrar/ocultar senha" aria-label="Mostrar senha">👁</button>
+        </div>
       </div>
 
       <button class="btn btn-primary btn-block" id="btn-login" onclick="doLogin()">
@@ -96,6 +99,8 @@
           msg = "Muitas tentativas. Aguarde um momento.";
         else if (code === "auth/invalid-api-key" || code === "auth/configuration-not-found" || code === "auth/project-not-found")
           msg = "Firebase não configurado. Configure as variáveis de ambiente no Netlify (FIREBASE_API_KEY, FIREBASE_PROJECT_ID, etc.).";
+        else if (code === "auth/network-request-failed")
+          msg = "Erro de rede. Verifique: 1) Firebase Console > Authentication > Settings > adicione 'capelasaomiguel.netlify.app' em Domínios autorizados. 2) Variáveis do Firebase no Netlify.";
         else if (code.startsWith("auth/"))
           msg = "Erro de autenticação: " + (e.message || code);
         err.textContent = msg;
@@ -118,7 +123,15 @@
       }
     };
 
-    // Enter key
+    window.togglePassword = function() {
+      const input = document.getElementById("password");
+      const btn = document.getElementById("btn-toggle-password");
+      const isPass = input.type === "password";
+      input.type = isPass ? "text" : "password";
+      btn.textContent = isPass ? "🙈" : "👁";
+      btn.setAttribute("aria-label", isPass ? "Ocultar senha" : "Mostrar senha");
+    };
+
     document.getElementById("password").addEventListener("keydown", e => {
       if (e.key === "Enter") doLogin();
     });

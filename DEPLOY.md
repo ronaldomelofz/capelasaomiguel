@@ -24,6 +24,12 @@ Para que cada `git push` dispare um novo deploy automaticamente:
 
 ## Configuração Rápida (Netlify + GitHub)
 
+### 0. Domínio autorizado no Firebase (obrigatório)
+
+No [Firebase Console](https://console.firebase.google.com) → **Authentication** → **Settings** (Configurações) → **Authorized domains** (Domínios autorizados):
+- Adicione `capelasaomiguel.netlify.app`
+- Sem isso, o login falha com "auth/network-request-failed"
+
 ### 1. Variáveis de Ambiente no Netlify
 
 Após conectar o repositório ao Netlify, configure em **Site settings → Environment variables**:
