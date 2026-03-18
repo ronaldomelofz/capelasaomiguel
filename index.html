@@ -34,7 +34,7 @@
       <div class="form-group">
         <label for="password">Senha</label>
         <div class="password-input-wrap">
-          <input type="password" id="password" placeholder="••••••••" autocomplete="off" />
+          <input type="password" id="password" placeholder="••••••••" autocomplete="off" data-lpignore="true" data-form-type="other" readonly />
           <button type="button" class="btn-toggle-password" id="btn-toggle-password" title="Mostrar/ocultar senha" aria-label="Mostrar senha">👁</button>
         </div>
       </div>
@@ -50,6 +50,9 @@
     document.addEventListener("DOMContentLoaded", function() {
       var btnToggle = document.getElementById("btn-toggle-password");
       var inputPass = document.getElementById("password");
+      if (inputPass) {
+        inputPass.addEventListener("focus", function() { this.removeAttribute("readonly"); }, { once: true });
+      }
       if (btnToggle && inputPass) {
         btnToggle.addEventListener("click", function() {
           var isPass = inputPass.type === "password";
@@ -98,7 +101,7 @@
         var ok = await login(email, password);
         if (ok) window.location.href = "pages/dashboard.html";
         else {
-          err.textContent = "Usuário ou senha inválidos. Use admin/admin para o primeiro acesso.";
+          err.textContent = "Usuário ou senha inválidos. Verifique suas credenciais.";
           err.classList.remove("hidden");
         }
       } catch (e) {

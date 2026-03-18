@@ -35,6 +35,7 @@ Edite `js/supabase-config.js` com a URL e chave anon. Este arquivo está no `.gi
 
 - Use **admin** / **admin** no login
 - O sistema cria automaticamente o usuário administrador no banco na primeira vez
+- **Recomendado:** Altere a senha padrão em Usuários após o primeiro acesso (evita avisos de segurança do navegador)
 
 ## Benefícios
 
