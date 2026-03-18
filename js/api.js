@@ -10,9 +10,9 @@ const KEY_CATEGORIAS = "livro_razao_categorias";
 const KEY_FORMAS = "livro_razao_formasPagamento";
 const KEY_PENDING_LANCAMENTOS = "livro_razao_pending_lancamentos";
 
-const REQUEST_TIMEOUT_MS = 15_000;
-const MAX_RETRIES = 3;
-const RETRY_DELAYS = [1000, 2000, 4000];
+const REQUEST_TIMEOUT_MS = 8_000;
+const MAX_RETRIES = 2;
+const RETRY_DELAYS = [500, 1500];
 
 let _connectionStatus = "online";
 let _statusListeners = [];
