@@ -156,50 +156,70 @@
   import { renderLayout } from "../js/layout.js";
   import { getLancamentos, deleteLancamento, updateLancamento, getCategoriasCustom, getFormasPagamentoCustom } from "../js/api.js";
 
-  renderLayout("lancamentos");
-  const { user, profile } = await requireAuth();
-  const admin = isAdmin(profile);
-
-  let allDocs = [];
-  let filtered = [];
-  let currentPage = 1;
-  const PAGE_SIZE = 20;
-  let selectedId = null;
-
-  // Fill selects (mês, ano) — sem await
-  const now = new Date();
-  const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  const mesEl = document.getElementById("f-mes");
-  meses.forEach((m,i) => { const o = document.createElement("option"); o.value = i+1; o.textContent = m; mesEl.appendChild(o); });
-  mesEl.value = now.getMonth() + 1;
-  const anoEl = document.getElementById("f-ano");
-  for (let y = now.getFullYear(); y >= now.getFullYear()-5; y--) {
-    const o = document.createElement("option"); o.value = y; o.textContent = y; anoEl.appendChild(o);
+  function showError(msg) {
+    const tbody = document.getElementById("tbody-lanc");
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">⚠️</div><h4>Erro ao carregar</h4><p>${msg}</p></div></td></tr>`;
   }
 
-  // Categorias: começa com padrões, custom em background
-  const catEl = document.getElementById("f-cat");
-  function populateCategorias(customCats = []) {
-    const cats = [...new Set([...CATEGORIAS_RECEITA, ...CATEGORIAS_DESPESA, ...customCats])].sort();
-    const sel = catEl.value;
-    catEl.innerHTML = '<option value="">Todas</option>';
-    cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catEl.appendChild(o); });
-    if (sel) catEl.value = sel;
-  }
-  populateCategorias();
-  getCategoriasCustom().then(c => populateCategorias(c.map(x => x.nome))).catch(() => {});
+  try {
+    renderLayout("lancamentos");
+    const authResult = await requireAuth();
+    if (!authResult) return;
+    const { user, profile } = authResult;
+    const admin = isAdmin(profile);
 
-  async function loadAll() {
-    try {
-      allDocs = await getLancamentos();
-    } catch (e) {
-      allDocs = [];
-      console.error("Erro ao carregar lançamentos:", e);
+    let allDocs = [];
+    let filtered = [];
+    let currentPage = 1;
+    const PAGE_SIZE = 20;
+    let selectedId = null;
+
+    // Fill selects (mês, ano)
+    const now = new Date();
+    const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const mesEl = document.getElementById("f-mes");
+    const anoEl = document.getElementById("f-ano");
+    if (mesEl) {
+      meses.forEach((m,i) => { const o = document.createElement("option"); o.value = i+1; o.textContent = m; mesEl.appendChild(o); });
+      mesEl.value = now.getMonth() + 1;
     }
-    applyFilters();
-  }
+    if (anoEl) {
+      const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Todos"; anoEl.appendChild(o0);
+      for (let y = now.getFullYear(); y >= now.getFullYear()-5; y--) {
+        const o = document.createElement("option"); o.value = y; o.textContent = y; anoEl.appendChild(o);
+      }
+    }
 
-  loadAll();
+    // Categorias: padrões primeiro, custom em background
+    const catEl = document.getElementById("f-cat");
+    function populateCategorias(customCats = []) {
+      if (!catEl) return;
+      const cats = [...new Set([...CATEGORIAS_RECEITA, ...CATEGORIAS_DESPESA, ...customCats])].sort();
+      const sel = catEl.value;
+      catEl.innerHTML = '<option value="">Todas</option>';
+      cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catEl.appendChild(o); });
+      if (sel) catEl.value = sel;
+    }
+    populateCategorias();
+    getCategoriasCustom().then(c => populateCategorias(c.map(x => x.nome))).catch(() => {});
+
+    async function loadAll() {
+      try {
+        const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Tempo esgotado. Verifique sua conexão.")), 20000));
+        allDocs = await Promise.race([getLancamentos(), timeout]);
+      } catch (e) {
+        allDocs = [];
+        console.error("Erro ao carregar lançamentos:", e);
+      }
+      try {
+        applyFilters();
+      } catch (e2) {
+        console.error("Erro ao aplicar filtros:", e2);
+        showError((e2 && e2.message) || "Erro inesperado");
+      }
+    }
+
+    loadAll();
 
   function getMes(d) { return d.mes ?? (d.data ? parseInt(d.data.split("-")[1], 10) : 0); }
   function getAno(d) { return d.ano ?? (d.data ? parseInt(d.data.split("-")[0], 10) : 0); }
@@ -236,14 +256,9 @@
   };
 
   window.resetFilters = function() {
-    document.getElementById("f-tipo").value = "";
-    document.getElementById("f-mes").value = "";
-    document.getElementById("f-ano").value = "";
-    document.getElementById("f-cat").value = "";
-    document.getElementById("f-busca").value = "";
-    filtered = [...allDocs];
-    currentPage = 1;
-    renderPage();
+    const f = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    f("f-tipo", ""); f("f-mes", ""); f("f-ano", ""); f("f-cat", ""); f("f-busca", "");
+    applyFilters();
   };
 
   function renderPage() {
@@ -370,9 +385,8 @@
     document.getElementById("modal-editar").classList.add("open");
   };
 
-  document.getElementById("edit-tipo").addEventListener("change", function() {
-    populateEditCategorias(this.value);
-  });
+  const editTipoEl = document.getElementById("edit-tipo");
+  if (editTipoEl) editTipoEl.addEventListener("change", function() { populateEditCategorias(this.value); });
 
   const editValorEl = document.getElementById("edit-valor");
   if (editValorEl) {
@@ -449,7 +463,13 @@
   window.closeModal = id => document.getElementById(id).classList.remove("open");
 
   // Enter to filter
-  document.getElementById("f-busca").addEventListener("keydown", e => { if (e.key === "Enter") applyFilters(); });
+  const fBusca = document.getElementById("f-busca");
+  if (fBusca) fBusca.addEventListener("keydown", e => { if (e.key === "Enter") applyFilters(); });
+
+  } catch (e) {
+    console.error("Erro na página de lançamentos:", e);
+    showError((e && e.message) || "Erro ao carregar a página. Verifique o console.");
+  }
 </script>
 </body>
 </html>

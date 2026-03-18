@@ -53,14 +53,16 @@ export function renderLayout(activeItem) {
   document.body.insertAdjacentHTML("afterbegin", sidebar);
   initConnectionStatus();
 
-  // Wrap remaining body content
+  // Wrap remaining body content (não move scripts para evitar problemas de execução)
   const mainEl = document.getElementById("app-main");
   if (!mainEl) {
     const wrapper = document.createElement("div");
     wrapper.className = "main-content";
     wrapper.id = "app-main";
     while (document.body.children.length > 1) {
-      wrapper.appendChild(document.body.children[1]);
+      const child = document.body.children[1];
+      if (child.tagName === "SCRIPT") break;
+      wrapper.appendChild(child);
     }
     document.body.appendChild(wrapper);
 
