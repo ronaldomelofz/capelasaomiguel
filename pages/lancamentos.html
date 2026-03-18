@@ -163,16 +163,13 @@
 
   try {
     renderLayout("lancamentos");
-    const authResult = await requireAuth();
-    if (!authResult) return;
-    const { user, profile } = authResult;
-    const admin = isAdmin(profile);
 
     let allDocs = [];
     let filtered = [];
     let currentPage = 1;
     const PAGE_SIZE = 20;
     let selectedId = null;
+    let admin = false;
 
     // Fill selects (mês, ano)
     const now = new Date();
@@ -203,28 +200,10 @@
     populateCategorias();
     getCategoriasCustom().then(c => populateCategorias(c.map(x => x.nome))).catch(() => {});
 
-    async function loadAll() {
-      try {
-        const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Tempo esgotado. Verifique sua conexão.")), 20000));
-        allDocs = await Promise.race([getLancamentos(), timeout]);
-      } catch (e) {
-        allDocs = [];
-        console.error("Erro ao carregar lançamentos:", e);
-      }
-      try {
-        applyFilters();
-      } catch (e2) {
-        console.error("Erro ao aplicar filtros:", e2);
-        showError((e2 && e2.message) || "Erro inesperado");
-      }
-    }
+    function getMes(d) { return d.mes ?? (d.data ? parseInt(d.data.split("-")[1], 10) : 0); }
+    function getAno(d) { return d.ano ?? (d.data ? parseInt(d.data.split("-")[0], 10) : 0); }
 
-    loadAll();
-
-  function getMes(d) { return d.mes ?? (d.data ? parseInt(d.data.split("-")[1], 10) : 0); }
-  function getAno(d) { return d.ano ?? (d.data ? parseInt(d.data.split("-")[0], 10) : 0); }
-
-  window.applyFilters = function() {
+    window.applyFilters = function() {
     const tipo   = document.getElementById("f-tipo").value;
     const mes    = document.getElementById("f-mes").value;
     const ano    = document.getElementById("f-ano").value;
@@ -261,7 +240,7 @@
     applyFilters();
   };
 
-  function renderPage() {
+    function renderPage() {
     const start = (currentPage - 1) * PAGE_SIZE;
     const page  = filtered.slice(start, start + PAGE_SIZE);
     const tbody = document.getElementById("tbody-lanc");
@@ -298,7 +277,28 @@
     }
     pHTML += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?"disabled":""}>›</button>`;
     document.getElementById("pag-controls").innerHTML = pHTML;
-  }
+    }
+
+    async function loadAll() {
+      try {
+        allDocs = await getLancamentos();
+      } catch (e) {
+        allDocs = [];
+        console.error("Erro ao carregar lançamentos:", e);
+      }
+      try {
+        applyFilters();
+      } catch (e2) {
+        console.error("Erro ao aplicar filtros:", e2);
+        showError((e2 && e2.message) || "Erro inesperado");
+      }
+    }
+
+    loadAll();
+    const authResult = await requireAuth();
+    if (!authResult) return;
+    admin = isAdmin(authResult.profile);
+    applyFilters();
 
   window.goPage = function(p) { currentPage = p; renderPage(); };
 
