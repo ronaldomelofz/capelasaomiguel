@@ -32,7 +32,7 @@ export function renderLayout(activeItem) {
   const sidebar = `
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <div><span class="cross">✝</span><span class="brand-name">Livro Razão</span></div>
+      <div><span class="cross">✝</span><span class="brand-name">Financeiro</span></div>
       <div class="brand-sub">Gestão Financeira da Paróquia</div>
     </div>
     <div class="sidebar-user">
