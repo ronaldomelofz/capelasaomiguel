@@ -77,8 +77,9 @@
     throw new Error("Acesso negado");
   }
 
-  function loadCategories() {
-    const custom = getCategoriasCustom();
+  async function loadCategories() {
+    let custom = [];
+    try { custom = await getCategoriasCustom(); } catch (e) { custom = []; }
     renderList("receita", CATEGORIAS_RECEITA, custom.filter(c => c.tipo === "receita"));
     renderList("despesa", CATEGORIAS_DESPESA, custom.filter(c => c.tipo === "despesa"));
   }
@@ -118,25 +119,29 @@
 
   window.closeModal = id => document.getElementById(id).classList.remove("open");
 
-  window.salvarCategoria = function() {
+  window.salvarCategoria = async function() {
     const nome = document.getElementById("cat-nome").value.trim();
     const tipo = document.getElementById("cat-tipo").value;
     if (!nome) { alert("Digite o nome da categoria."); return; }
-    addCategoria({ nome, tipo, criadoEm: new Date().toISOString(), criadoPor: user.uid });
-    closeModal("modal-add-cat");
-    const al = document.getElementById("cat-alert");
-    al.textContent = "✅ Categoria adicionada!"; al.className = "alert alert-success";
-    setTimeout(() => { al.className = "alert hidden"; }, 3000);
-    loadCategories();
+    try {
+      await addCategoria({ nome, tipo });
+      closeModal("modal-add-cat");
+      const al = document.getElementById("cat-alert");
+      al.textContent = "✅ Categoria adicionada!"; al.className = "alert alert-success";
+      setTimeout(() => { al.className = "alert hidden"; }, 3000);
+      loadCategories();
+    } catch (e) { alert("Erro: " + (e.message || "tente novamente")); }
   };
 
-  window.excluirCategoria = function(id) {
+  window.excluirCategoria = async function(id) {
     if (!confirm("Excluir esta categoria?")) return;
-    deleteCategoria(id);
-    const al = document.getElementById("cat-alert");
-    al.textContent = "✅ Categoria excluída!"; al.className = "alert alert-success";
-    setTimeout(() => { al.className = "alert hidden"; }, 3000);
-    loadCategories();
+    try {
+      await deleteCategoria(id);
+      const al = document.getElementById("cat-alert");
+      al.textContent = "✅ Categoria excluída!"; al.className = "alert alert-success";
+      setTimeout(() => { al.className = "alert hidden"; }, 3000);
+      loadCategories();
+    } catch (e) { alert("Erro: " + (e.message || "tente novamente")); }
   };
 
   loadCategories();

@@ -1,111 +1,167 @@
-// js/api.js — API local com localStorage (sem Firebase, sem backend)
+// js/api.js — API com Supabase (PostgreSQL)
 
-const STORAGE_KEY = "livro_razao";
-const KEYS = { LANCAMENTOS: "lancamentos", USUARIOS: "usuarios", CATEGORIAS: "categorias", FORMAS_PAGAMENTO: "formasPagamento", SESSION: "session" };
+import { getSupabase } from "./supabase-client.js";
 
-function getKey(k) { return `${STORAGE_KEY}_${k}`; }
-
-function load(k) {
-  try {
-    const data = localStorage.getItem(getKey(k));
-    return data ? JSON.parse(data) : (k === KEYS.USUARIOS ? [] : k === KEYS.LANCAMENTOS ? [] : k === KEYS.CATEGORIAS ? [] : k === KEYS.FORMAS_PAGAMENTO ? [] : null);
-  } catch { return []; }
+// Mapeamento snake_case <-> camelCase
+function toUsuario(row) {
+  if (!row) return null;
+  return {
+    uid: row.uid,
+    nome: row.nome,
+    email: row.email,
+    usuario: row.usuario,
+    senhaHash: row.senha_hash,
+    perfil: row.perfil,
+    cpf: row.cpf,
+    endereco: row.endereco,
+    observacoes: row.observacoes,
+    criadoEm: row.criado_em,
+  };
 }
 
-function save(k, data) {
-  localStorage.setItem(getKey(k), JSON.stringify(data));
+function toLancamento(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    tipo: row.tipo,
+    data: row.data,
+    valor: row.valor,
+    categoria: row.categoria,
+    descricao: row.descricao,
+    responsavel: row.responsavel,
+    observacoes: row.observacoes,
+    numeroDocumento: row.numero_documento,
+    formaPagamento: row.forma_pagamento,
+    criadoPor: row.criado_por,
+    criadoPorEmail: row.criado_por_email,
+    mes: row.mes,
+    ano: row.ano,
+    criadoEm: row.criado_em,
+  };
 }
 
 // ========== LANÇAMENTOS ==========
-export function getLancamentos() {
-  return load(KEYS.LANCAMENTOS).sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+export async function getLancamentos() {
+  const { data, error } = await getSupabase()
+    .from("lancamentos")
+    .select("*")
+    .order("data", { ascending: false });
+  if (error) throw new Error(error.message || "Erro ao carregar lançamentos");
+  return (data || []).map(toLancamento);
 }
 
-export function addLancamento(obj) {
-  const list = load(KEYS.LANCAMENTOS);
+export async function addLancamento(obj) {
   const id = "l" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
-  const item = { id, ...obj, criadoEm: new Date().toISOString() };
-  list.push(item);
-  save(KEYS.LANCAMENTOS, list);
-  return item;
+  const row = {
+    id,
+    tipo: obj.tipo,
+    data: obj.data,
+    valor: obj.valor,
+    categoria: obj.categoria,
+    descricao: obj.descricao,
+    responsavel: obj.responsavel ?? null,
+    observacoes: obj.observacoes ?? null,
+    numero_documento: obj.numeroDocumento ?? null,
+    forma_pagamento: obj.formaPagamento ?? null,
+    criado_por: obj.criadoPor ?? null,
+    criado_por_email: obj.criadoPorEmail ?? null,
+    mes: obj.mes ?? null,
+    ano: obj.ano ?? null,
+  };
+  const { data, error } = await getSupabase().from("lancamentos").insert(row).select().single();
+  if (error) throw new Error(error.message || "Erro ao salvar lançamento");
+  return toLancamento(data);
 }
 
-export function deleteLancamento(id) {
-  const list = load(KEYS.LANCAMENTOS).filter(x => x.id !== id);
-  save(KEYS.LANCAMENTOS, list);
+export async function deleteLancamento(id) {
+  const { error } = await getSupabase().from("lancamentos").delete().eq("id", id);
+  if (error) throw new Error(error.message || "Erro ao excluir lançamento");
 }
 
-export function getLancamentoById(id) {
-  return load(KEYS.LANCAMENTOS).find(x => x.id === id);
+export async function getLancamentoById(id) {
+  const { data, error } = await getSupabase().from("lancamentos").select("*").eq("id", id).single();
+  if (error && error.code !== "PGRST116") throw new Error(error.message);
+  return data ? toLancamento(data) : null;
 }
 
 // ========== USUÁRIOS ==========
-export function getUsuarios() {
-  return load(KEYS.USUARIOS);
+export async function getUsuarios() {
+  const { data, error } = await getSupabase().from("usuarios").select("*");
+  if (error) throw new Error(error.message || "Erro ao carregar usuários");
+  return (data || []).map(toUsuario);
 }
 
-export function getUsuarioById(uid) {
-  return load(KEYS.USUARIOS).find(x => x.uid === uid);
+export async function getUsuarioById(uid) {
+  const { data, error } = await getSupabase().from("usuarios").select("*").eq("uid", uid).single();
+  if (error && error.code !== "PGRST116") throw new Error(error.message);
+  return data ? toUsuario(data) : null;
 }
 
-export function saveUsuario(uid, data) {
-  const list = load(KEYS.USUARIOS);
-  const idx = list.findIndex(x => x.uid === uid);
-  const item = { uid, ...(idx >= 0 ? list[idx] : {}), ...data };
-  if (idx >= 0) list[idx] = item;
-  else list.push(item);
-  save(KEYS.USUARIOS, list);
-}
+export async function saveUsuario(uid, data) {
+  const row = {
+    uid,
+    nome: data.nome ?? null,
+    email: data.email ?? null,
+    usuario: data.usuario ?? null,
+    perfil: data.perfil ?? "visualizador",
+    cpf: data.cpf ?? null,
+    endereco: data.endereco ?? null,
+    observacoes: data.observacoes ?? null,
+  };
+  const senhaHash = data.senhaHash ?? data.senha_hash;
+  if (senhaHash) row.senha_hash = senhaHash;
 
-export function deleteUsuario(uid) {
-  save(KEYS.USUARIOS, load(KEYS.USUARIOS).filter(x => x.uid !== uid));
-}
-
-/** Importa usuários (merge por uid). Útil quando admin e usuário usam dispositivos diferentes. */
-export function importUsuarios(usuarios) {
-  if (!Array.isArray(usuarios) || !usuarios.length) return 0;
-  const list = load(KEYS.USUARIOS);
-  const byUid = new Map(list.map(u => [u.uid, u]));
-  let added = 0;
-  for (const u of usuarios) {
-    if (!u || !u.uid || !u.senhaHash) continue;
-    if (!byUid.has(u.uid)) {
-      byUid.set(u.uid, u);
-      added++;
-    }
+  const { data: existing } = await getSupabase().from("usuarios").select("uid").eq("uid", uid).single();
+  if (existing) {
+    const { error } = await getSupabase().from("usuarios").update(row).eq("uid", uid);
+    if (error) throw new Error(error.message || "Erro ao atualizar usuário");
+  } else {
+    if (!row.senha_hash) throw new Error("Senha é obrigatória para novo usuário");
+    row.criado_em = new Date().toISOString();
+    const { error } = await getSupabase().from("usuarios").insert(row);
+    if (error) throw new Error(error.message || "Erro ao criar usuário");
   }
-  save(KEYS.USUARIOS, Array.from(byUid.values()));
-  return added;
 }
 
-// ========== CATEGORIAS CUSTOM ==========
-export function getCategoriasCustom() {
-  return load(KEYS.CATEGORIAS);
+export async function deleteUsuario(uid) {
+  const { error } = await getSupabase().from("usuarios").delete().eq("uid", uid);
+  if (error) throw new Error(error.message || "Erro ao excluir usuário");
 }
 
-export function addCategoria(obj) {
-  const list = load(KEYS.CATEGORIAS);
+// ========== CATEGORIAS ==========
+export async function getCategoriasCustom() {
+  const { data, error } = await getSupabase().from("categorias").select("*");
+  if (error) throw new Error(error.message || "Erro ao carregar categorias");
+  return (data || []).map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo }));
+}
+
+export async function addCategoria(obj) {
   const id = "c" + Date.now();
-  list.push({ id, ...obj });
-  save(KEYS.CATEGORIAS, list);
+  const { error } = await getSupabase().from("categorias").insert({ id, nome: obj.nome, tipo: obj.tipo });
+  if (error) throw new Error(error.message || "Erro ao salvar categoria");
+  return { id, ...obj };
 }
 
-export function deleteCategoria(id) {
-  save(KEYS.CATEGORIAS, load(KEYS.CATEGORIAS).filter(x => x.id !== id));
+export async function deleteCategoria(id) {
+  const { error } = await getSupabase().from("categorias").delete().eq("id", id);
+  if (error) throw new Error(error.message || "Erro ao excluir categoria");
 }
 
 // ========== FORMAS DE PAGAMENTO ==========
-export function getFormasPagamentoCustom() {
-  return load(KEYS.FORMAS_PAGAMENTO);
+export async function getFormasPagamentoCustom() {
+  const { data, error } = await getSupabase().from("formas_pagamento").select("*");
+  if (error) throw new Error(error.message || "Erro ao carregar formas de pagamento");
+  return (data || []).map((r) => ({ id: r.id, nome: r.nome }));
 }
 
-export function addFormaPagamento(nome) {
-  const list = load(KEYS.FORMAS_PAGAMENTO);
+export async function addFormaPagamento(nome) {
   const id = "fp" + Date.now();
-  list.push({ id, nome });
-  save(KEYS.FORMAS_PAGAMENTO, list);
+  const { error } = await getSupabase().from("formas_pagamento").insert({ id, nome });
+  if (error) throw new Error(error.message || "Erro ao salvar forma de pagamento");
+  return { id, nome };
 }
 
-export function deleteFormaPagamento(id) {
-  save(KEYS.FORMAS_PAGAMENTO, load(KEYS.FORMAS_PAGAMENTO).filter(x => x.id !== id));
+export async function deleteFormaPagamento(id) {
+  const { error } = await getSupabase().from("formas_pagamento").delete().eq("id", id);
+  if (error) throw new Error(error.message || "Erro ao excluir forma de pagamento");
 }

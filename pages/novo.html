@@ -82,19 +82,19 @@
 
   document.getElementById("data").value = new Date().toISOString().split("T")[0];
 
-  function populateFormasPagamento() {
+  async function populateFormasPagamento() {
     const sel = document.getElementById("forma-pagto");
-    const custom = getFormasPagamentoCustom().map(f => f.nome);
+    const custom = (await getFormasPagamentoCustom()).map(f => f.nome);
     const formas = [...FORMAS_PAGAMENTO_PADRAO, ...custom];
     sel.innerHTML = '<option value="">— Selecione —</option>';
     formas.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
   }
 
-  function populateCategories(tipo) {
+  async function populateCategories(tipo) {
     const sel = document.getElementById("categoria");
     sel.innerHTML = '<option value="">— Selecione a categoria —</option>';
     const defaults = tipo === "receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
-    const custom = getCategoriasCustom().filter(c => c.tipo === tipo).map(c => c.nome);
+    const custom = (await getCategoriasCustom()).filter(c => c.tipo === tipo).map(c => c.nome);
     [...defaults, ...custom].forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
   }
   populateCategories("receita");
@@ -115,7 +115,7 @@
     populateCategories(tipo);
   };
 
-  window.salvarLancamento = function() {
+  window.salvarLancamento = async function() {
     const alertEl = document.getElementById("form-alert");
     alertEl.className = "alert hidden";
 
@@ -144,20 +144,20 @@
     const btn = document.getElementById("btn-salvar");
     btn.disabled = true; btn.textContent = "Salvando...";
 
-    const [y, m] = data.split("-");
-    addLancamento({
-      tipo, data, valor, categoria, descricao,
-      responsavel: responsavel || null,
-      observacoes: observacoes || null,
-      numeroDocumento: numDoc || null,
-      formaPagamento: formaPagto || null,
-      criadoPor: user.uid,
-      criadoPorEmail: user.email,
-      mes: parseInt(m, 10),
-      ano: parseInt(y, 10)
-    });
-
-    alertEl.textContent = "✅ Lançamento salvo com sucesso!";
+    try {
+      const [y, m] = data.split("-");
+      await addLancamento({
+        tipo, data, valor, categoria, descricao,
+        responsavel: responsavel || null,
+        observacoes: observacoes || null,
+        numeroDocumento: numDoc || null,
+        formaPagamento: formaPagto || null,
+        criadoPor: user.uid,
+        criadoPorEmail: user.email,
+        mes: parseInt(m, 10),
+        ano: parseInt(y, 10)
+      });
+      alertEl.textContent = "✅ Lançamento salvo com sucesso!";
     alertEl.className = "alert alert-success";
     document.getElementById("data").value = new Date().toISOString().split("T")[0];
     document.getElementById("valor").value = "";
@@ -168,6 +168,10 @@
     document.getElementById("numero-doc").value = "";
     document.getElementById("forma-pagto").value = "";
     setTimeout(() => { alertEl.className = "alert hidden"; }, 4000);
+    } catch (e) {
+      alertEl.textContent = "Erro ao salvar: " + (e.message || "tente novamente");
+      alertEl.className = "alert alert-error";
+    }
     btn.disabled = false; btn.textContent = "💾 Salvar Lançamento";
   };
 </script>

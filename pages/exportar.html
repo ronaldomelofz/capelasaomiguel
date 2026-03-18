@@ -102,12 +102,14 @@
 
   let dados = [];
 
-  function fetchDados() {
+  async function fetchDados() {
     const tipo = document.getElementById("exp-tipo").value;
     const mes  = document.getElementById("exp-mes").value;
     const ano  = document.getElementById("exp-ano").value;
 
-    dados = getLancamentos().filter(d => {
+    let all = [];
+    try { all = await getLancamentos(); } catch (e) { console.error(e); }
+    dados = all.filter(d => {
       if (tipo && d.tipo !== tipo) return false;
       if (mes && d.mes !== +mes) return false;
       if (ano && d.ano !== +ano) return false;
@@ -139,9 +141,9 @@
     return dados;
   }
 
-  window.exportarExcel = function() {
+  window.exportarExcel = async function() {
     setStatus("Preparando Excel...", "info");
-    fetchDados();
+    await fetchDados();
 
     const rows = dados.map(d => ({
       Data: formatDate(d.data),
@@ -179,9 +181,9 @@
     setStatus("✅ Excel exportado com sucesso!", "success");
   };
 
-  window.exportarPDF = function() {
+  window.exportarPDF = async function() {
     setStatus("Gerando PDF...", "info");
-    fetchDados();
+    await fetchDados();
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: "landscape", format: "a4" });
@@ -232,8 +234,8 @@
     setStatus("✅ PDF exportado com sucesso!", "success");
   };
 
-  window.imprimirRelatorio = function() {
-    fetchDados();
+  window.imprimirRelatorio = async function() {
+    await fetchDados();
     window.print();
   };
 

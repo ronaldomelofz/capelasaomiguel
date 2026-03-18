@@ -106,8 +106,9 @@
     });
   }
 
-  function loadDashboard() {
-    const all = getLancamentos();
+  async function loadDashboard() {
+    let all = [];
+    try { all = await getLancamentos(); } catch (e) { console.error(e); }
     const docs = filterByMonth(all, selMes, selAno);
 
     let totalR = 0, totalD = 0, cntR = 0, cntD = 0;

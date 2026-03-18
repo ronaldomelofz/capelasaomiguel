@@ -46,7 +46,7 @@ export function isAdmin(profile) {
 }
 
 export async function login(emailOrUser, password) {
-  const users = getUsuarios();
+  const users = await getUsuarios();
   const pwHash = await hashPassword(password);
   const input = String(emailOrUser || "").trim().toLowerCase();
 
@@ -62,7 +62,7 @@ export async function login(emailOrUser, password) {
     if (!adminUser) {
       const uid = "admin_" + Date.now();
       const defaultAdmin = { uid, email: "admin@capelasaomiguel.com", nome: "Administrador", perfil: PERFIS.ADMIN, senhaHash: await hashPassword("admin") };
-      saveUsuario(uid, defaultAdmin);
+      await saveUsuario(uid, defaultAdmin);
       adminUser = defaultAdmin;
     }
     if (adminUser && adminUser.senhaHash === pwHash) user = adminUser;
@@ -74,14 +74,14 @@ export async function login(emailOrUser, password) {
 }
 
 export async function criarUsuarioLocal(nome, email, senha, perfil, cpf, endereco, usuario, observacoes) {
-  const users = getUsuarios();
+  const users = await getUsuarios();
   const emailNorm = (email || "").trim().toLowerCase();
   if (users.some(u => (u.email || "").trim().toLowerCase() === emailNorm)) throw new Error("E-mail já em uso");
   const usuarioNorm = (usuario || "").trim() || null;
   if (usuarioNorm && users.some(u => u.usuario && String(u.usuario).trim().toLowerCase() === usuarioNorm.toLowerCase())) throw new Error("Usuário de acesso já em uso");
   const uid = "u" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
   const senhaHash = await hashPassword(senha);
-  saveUsuario(uid, { nome, email: (email || "").trim(), perfil, senhaHash, cpf: cpf || null, endereco: endereco || null, usuario: usuarioNorm, observacoes: (observacoes || "").trim() || null, criadoEm: new Date().toISOString() });
+  await saveUsuario(uid, { nome, email: (email || "").trim(), perfil, senhaHash, cpf: cpf || null, endereco: endereco || null, usuario: usuarioNorm, observacoes: (observacoes || "").trim() || null });
   return uid;
 }
 

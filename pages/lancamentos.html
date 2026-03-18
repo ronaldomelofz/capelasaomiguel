@@ -121,13 +121,18 @@
     const o = document.createElement("option"); o.value = y; o.textContent = y; anoEl.appendChild(o);
   }
 
-  const customCats = getCategoriasCustom().map(c => c.nome);
+  const customCats = (await getCategoriasCustom()).map(c => c.nome);
   const cats = [...new Set([...CATEGORIAS_RECEITA, ...CATEGORIAS_DESPESA, ...customCats])].sort();
   const catEl = document.getElementById("f-cat");
   cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catEl.appendChild(o); });
 
-  function loadAll() {
-    allDocs = getLancamentos();
+  async function loadAll() {
+    try {
+      allDocs = await getLancamentos();
+    } catch (e) {
+      allDocs = [];
+      console.error("Erro ao carregar lançamentos:", e);
+    }
     applyFilters();
   }
 
@@ -243,10 +248,10 @@
     document.getElementById("modal-detalhe").classList.add("open");
   };
 
-  window.excluirLancamento = function() {
+  window.excluirLancamento = async function() {
     if (!selectedId) return;
     if (!confirm("Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.")) return;
-    deleteLancamento(selectedId);
+    await deleteLancamento(selectedId);
     allDocs = allDocs.filter(d => d.id !== selectedId);
     closeModal("modal-detalhe");
     applyFilters();

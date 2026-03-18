@@ -62,8 +62,9 @@
     throw new Error("Acesso negado");
   }
 
-  function loadFormas() {
-    const custom = getFormasPagamentoCustom();
+  async function loadFormas() {
+    let custom = [];
+    try { custom = await getFormasPagamentoCustom(); } catch (e) { custom = []; }
     const container = document.getElementById("list-formas");
 
     let html = `<div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:.5rem 0 .35rem;">Padrão do Sistema</div>`;
@@ -94,24 +95,28 @@
 
   window.closeModal = id => document.getElementById(id).classList.remove("open");
 
-  window.salvarFormaPagamento = function() {
+  window.salvarFormaPagamento = async function() {
     const nome = document.getElementById("fp-nome").value.trim();
     if (!nome) { alert("Digite o nome da forma de pagamento."); return; }
-    addFormaPagamento(nome);
-    closeModal("modal-add-fp");
-    const al = document.getElementById("fp-alert");
-    al.textContent = "✅ Forma de pagamento adicionada!"; al.className = "alert alert-success";
-    setTimeout(() => { al.className = "alert hidden"; }, 3000);
-    loadFormas();
+    try {
+      await addFormaPagamento(nome);
+      closeModal("modal-add-fp");
+      const al = document.getElementById("fp-alert");
+      al.textContent = "✅ Forma de pagamento adicionada!"; al.className = "alert alert-success";
+      setTimeout(() => { al.className = "alert hidden"; }, 3000);
+      loadFormas();
+    } catch (e) { alert("Erro: " + (e.message || "tente novamente")); }
   };
 
-  window.excluirFormaPagamento = function(id) {
+  window.excluirFormaPagamento = async function(id) {
     if (!confirm("Excluir esta forma de pagamento?")) return;
-    deleteFormaPagamento(id);
-    const al = document.getElementById("fp-alert");
-    al.textContent = "✅ Forma de pagamento excluída!"; al.className = "alert alert-success";
-    setTimeout(() => { al.className = "alert hidden"; }, 3000);
-    loadFormas();
+    try {
+      await deleteFormaPagamento(id);
+      const al = document.getElementById("fp-alert");
+      al.textContent = "✅ Forma de pagamento excluída!"; al.className = "alert alert-success";
+      setTimeout(() => { al.className = "alert hidden"; }, 3000);
+      loadFormas();
+    } catch (e) { alert("Erro: " + (e.message || "tente novamente")); }
   };
 
   loadFormas();

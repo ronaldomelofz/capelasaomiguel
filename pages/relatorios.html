@@ -70,8 +70,8 @@
 
   let chartInst = null;
 
-  function fetchPeriod(mes, ano) {
-    const all = getLancamentos();
+  async function fetchPeriod(mes, ano) {
+    const all = await getLancamentos();
     return all.filter(d => {
       const m = d.mes || (d.data ? parseInt(d.data.split("-")[1], 10) : 0);
       const y = d.ano || (d.data ? parseInt(d.data.split("-")[0], 10) : 0);
@@ -79,11 +79,12 @@
     });
   }
 
-  function fetchYear(ano) {
-    return getLancamentos().filter(d => (d.ano || (d.data ? parseInt(d.data.split("-")[0], 10) : 0)) === ano);
+  async function fetchYear(ano) {
+    const all = await getLancamentos();
+    return all.filter(d => (d.ano || (d.data ? parseInt(d.data.split("-")[0], 10) : 0)) === ano);
   }
 
-  window.renderReport = function() {
+  window.renderReport = async function() {
     const tipo = document.getElementById("rel-tipo").value;
     const mes  = +document.getElementById("rel-mes").value;
     const ano  = +document.getElementById("rel-ano").value;
@@ -93,8 +94,8 @@
     if (chartInst) { chartInst.destroy(); chartInst = null; }
 
     let docs = tipo === "anual" || tipo === "comparativo"
-      ? fetchYear(ano)
-      : fetchPeriod(mes, ano);
+      ? await fetchYear(ano)
+      : await fetchPeriod(mes, ano);
 
     if (tipo === "mensal") renderMensal(docs, mes, ano, cont);
     else if (tipo === "anual") renderAnual(docs, ano, cont);

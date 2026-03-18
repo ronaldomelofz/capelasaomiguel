@@ -1,6 +1,6 @@
 # ✝ Livro Razão — Portal Financeiro da Paróquia
 
-Sistema web de gestão financeira paroquial com **localStorage** — sem Firebase, sem backend.  
+Sistema web de gestão financeira paroquial com **Supabase** (PostgreSQL open-source).  
 Deploy no **Netlify** + **GitHub**. Funciona como livro razão digital: controle de receitas e despesas com relatórios, gráficos e exportação.
 
 ---
@@ -32,7 +32,7 @@ Deploy no **Netlify** + **GitHub**. Funciona como livro razão digital: controle
 4. **Publish directory:** `.`
 5. Deploy
 
-**Sem configuração** — não precisa de Firebase, variáveis de ambiente ou domínios autorizados.
+**Configuração:** crie um projeto no [Supabase](https://supabase.com), execute `supabase/schema.sql` e preencha `js/supabase-config.js`. Veja `SUPABASE_SETUP.md`.
 
 ---
 
@@ -47,10 +47,10 @@ No primeiro login, o sistema cria automaticamente o usuário administrador.
 
 ## 📁 Dados
 
-Os dados ficam no **localStorage** do navegador:
-- Por dispositivo/navegador
-- Use **Exportar** para backup em Excel/PDF
-- Limpar dados do site apaga os registros
+Os dados ficam no **banco Supabase** (PostgreSQL):
+- Centralizados — todos os usuários acessam as mesmas informações
+- Backup automático pelo Supabase
+- Use **Exportar** para Excel/PDF
 
 ---
 
@@ -63,7 +63,8 @@ Os dados ficam no **localStorage** do navegador:
 ├── js/
 │   ├── config.js       ← Categorias padrão
 │   ├── auth.js         ← Autenticação local
-│   ├── api.js          ← API localStorage
+│   ├── api.js          ← API Supabase
+│   ├── supabase-config.js
 │   └── layout.js       ← Sidebar
 └── pages/
     ├── dashboard.html

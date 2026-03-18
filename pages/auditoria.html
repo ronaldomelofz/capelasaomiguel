@@ -73,8 +73,12 @@
   let allDocs = [], filtered = [], currentPage = 1;
   const PAGE_SIZE = 30;
 
-  function load() {
-    allDocs = getLancamentos().sort((a, b) => (b.criadoEm || "").localeCompare(a.criadoEm || ""));
+  async function load() {
+    try {
+      allDocs = (await getLancamentos()).sort((a, b) => (b.criadoEm || "").localeCompare(a.criadoEm || ""));
+    } catch (e) {
+      allDocs = [];
+    }
 
     // Populate user filter
     const users = [...new Set(allDocs.map(d => d.criadoPorEmail).filter(Boolean))];

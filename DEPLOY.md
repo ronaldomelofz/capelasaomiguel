@@ -7,9 +7,17 @@
 
 ## Tecnologia
 
-- **localStorage** — dados no navegador (sem Firebase, sem backend)
+- **Supabase** — PostgreSQL (banco de dados open-source)
 - **Netlify** — hospedagem estática
 - **GitHub** — repositório
+
+## Configuração obrigatória
+
+Antes do deploy, configure o Supabase:
+
+1. Crie um projeto em [supabase.com](https://supabase.com)
+2. Execute o SQL em `supabase/schema.sql` no SQL Editor
+3. Edite `js/supabase-config.js` com sua URL e chave anon (Settings > API)
 
 ## Deploy
 
