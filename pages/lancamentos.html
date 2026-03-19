@@ -71,7 +71,7 @@
   <!-- Table -->
   <div class="card">
     <div class="table-wrapper">
-      <table>
+      <table id="table-lancamentos">
         <thead>
           <tr>
             <th class="text-center" style="width:40px;"><input type="checkbox" id="select-all-lanc" title="Selecionar todos desta página" class="admin-only"></th>
@@ -381,7 +381,7 @@
         <td class="text-center">
           <button class="btn btn-outline btn-sm" onclick="openDetalhe('${d.id}')">👁 Ver</button>
           ${admin ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openEdicao('${d.id}')">✏️ Editar</button>` : ""}
-          ${admin ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();apagarUmLancamento('${d.id}')" title="Apagar">🗑 Apagar</button>` : ""}
+          ${admin ? `<button type="button" class="btn btn-outline btn-sm btn-excluir-lanc" data-id="${d.id}" title="Excluir">🗑 Excluir</button>` : ""}
         </td>
       </tr>`).join("");
 
@@ -616,7 +616,7 @@
 
   window.apagarUmLancamento = async function(id) {
     if (!id) return;
-    if (!confirm("Apagar este lançamento? Esta ação não pode ser desfeita.")) return;
+    if (!confirm("Excluir este lançamento? Esta ação não pode ser desfeita.")) return;
     try {
       await deleteLancamento(id);
       allDocs = allDocs.filter(d => d.id !== id);
@@ -624,9 +624,19 @@
       applyFilters();
       updateCountSelecionados();
     } catch (e) {
-      alert("Erro ao apagar: " + (e.message || "tente novamente"));
+      alert("Erro ao excluir: " + (e.message || "tente novamente"));
     }
   };
+
+  document.getElementById("table-lancamentos")?.addEventListener("click", function(e) {
+    const btn = e.target.closest(".btn-excluir-lanc");
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = btn.getAttribute("data-id");
+      if (id) apagarUmLancamento(id);
+    }
+  });
 
   window.apagarSelecionados = async function() {
     const ids = [...selectedIds];
