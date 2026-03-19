@@ -1,6 +1,9 @@
 /**
  * Parser de extrato bancário em PDF
  * Colunas: Dia, Lote, Documento, Histórico, Valor
+ * - Lote: desconsiderado (ignorado)
+ * - Documento: → Nº do Documento / Recibo
+ * - Histórico: → Descrição * (somente o texto da coluna histórico)
  * Valor: "1.234,56 (+)" = crédito/receita, "1.234,56 (-)" = débito/despesa
  * Ignora: Saldo Anterior, Saldo do dia, Saldo
  */
@@ -52,24 +55,31 @@ export function extrairLancamentosDoTexto(text) {
     if (EXCLUIR_PALAVRAS.some((p) => historicoLower.includes(p))) continue;
     if (EXCLUIR_REGEX.test(bloco)) continue;
 
-    // Preservar TODO o texto do histórico (incluindo documentos, IDs, descrições completas)
-    let historico = bloco
+    // Resto do bloco: remove data e valor (Lote, Documento, Histórico)
+    let resto = bloco
       .replace(VALOR_REGEX, "")
       .replace(/^\s*\d{2}\/\d{2}\/\d{4}\s*/, "")
       .replace(/\s+/g, " ")
       .trim();
 
-    const docMatch = bloco.match(/\b(\d{10,20})\b/);
+    // Documento: coluna documento → Nº do Documento / Recibo (número longo 10-20 dígitos)
+    const docMatch = resto.match(/\b(\d{10,20})\b/);
     const numeroDocumento = docMatch ? docMatch[1] : null;
 
-    const descricao = historico.slice(0, 200) || (tipo === "receita" ? "Importado - Receita" : "Importado - Despesa");
+    // Remove documento do resto; o que sobra = Histórico (Lote é desconsiderado)
+    let historico = docMatch ? resto.replace(docMatch[0], "").trim() : resto;
+    // Remove possível lote (número curto 1-6 dígitos no início)
+    historico = historico.replace(/^\s*\d{1,6}\s+/, "").trim();
+
+    // Somente o texto da coluna Histórico → Descrição *
+    const descricao = historico || (tipo === "receita" ? "Importado - Receita" : "Importado - Despesa");
 
     resultado.push({
       data,
       tipo,
       valor,
       numeroDocumento: numeroDocumento || null,
-      observacoes: historico || null,
+      observacoes: null,
       descricao,
     });
   }

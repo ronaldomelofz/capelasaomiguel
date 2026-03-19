@@ -12,6 +12,7 @@
   <span class="topbar-title">📒 Lançamentos</span>
   <div class="topbar-actions">
     <button class="btn btn-outline admin-only" onclick="abrirModalImportar()">📥 Importar Extrato</button>
+    <button class="btn btn-outline admin-only" id="btn-apagar-ultimo-import" onclick="apagarUltimoImport()" style="display:none;" title="Remove os lançamentos do último PDF importado">🗑 Apagar último import</button>
     <a href="novo.html" class="btn btn-success admin-only">+ Novo</a>
   </div>
 </div>
@@ -387,6 +388,7 @@
     if (authResult) {
       admin = isAdmin(authResult.profile);
       applyFilters();
+      setUltimoImportIds(getUltimoImportIds());
     }
 
   window.goPage = function(p) { currentPage = p; renderPage(); };
@@ -553,6 +555,19 @@
 
   let lancamentosParaImportar = [];
   let impEditIdx = -1;
+  const KEY_ULTIMO_IMPORT = "portal_ultimo_import_ids";
+
+  function getUltimoImportIds() {
+    try {
+      const s = sessionStorage.getItem(KEY_ULTIMO_IMPORT);
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
+  }
+  function setUltimoImportIds(ids) {
+    sessionStorage.setItem(KEY_ULTIMO_IMPORT, JSON.stringify(ids));
+    const btn = document.getElementById("btn-apagar-ultimo-import");
+    if (btn) btn.style.display = ids.length && admin ? "inline-flex" : "none";
+  }
 
   function renderImportPreview() {
     const tbody = document.getElementById("import-preview-body");
@@ -732,6 +747,7 @@
     const total = lancamentosParaImportar.length;
     const alertEl = document.getElementById("import-alert");
     let ok = 0, err = 0;
+    const idsImportados = [];
     const catReceita = "Outras Receitas", catDespesa = "Outras Despesas";
     for (let i = 0; i < lancamentosParaImportar.length; i++) {
       const pct = Math.round(((i + 1) / total) * 100);
@@ -739,7 +755,7 @@
       const l = lancamentosParaImportar[i];
       try {
         const [y, m] = l.data.split("-");
-        await addLancamento({
+        const inserted = await addLancamento({
           tipo: l.tipo,
           data: l.data,
           valor: l.valor,
@@ -754,6 +770,7 @@
           criadoPor: authResult?.user?.uid ?? null,
           criadoPorEmail: authResult?.user?.email ?? null,
         });
+        if (inserted && inserted.id) idsImportados.push(inserted.id);
         ok++;
       } catch (e) {
         err++;
@@ -761,12 +778,33 @@
     }
     btn.textContent = "💾 Importar";
     btn.disabled = false;
+    if (idsImportados.length) setUltimoImportIds(idsImportados);
     alertEl.textContent = `✅ ${ok} lançamento(s) importado(s).${err ? ` ${err} falha(s).` : ""}`;
     alertEl.className = "alert alert-success";
     alertEl.classList.remove("hidden");
     allDocs = await getLancamentos();
     applyFilters();
     setTimeout(() => { closeModal("modal-importar"); }, 1500);
+  };
+
+  window.apagarUltimoImport = async function() {
+    const ids = getUltimoImportIds();
+    if (!ids.length) return;
+    if (!confirm(`Remover ${ids.length} lançamento(s) do último PDF importado? Esta ação não pode ser desfeita.`)) return;
+    const btn = document.getElementById("btn-apagar-ultimo-import");
+    if (btn) btn.disabled = true;
+    try {
+      for (const id of ids) {
+        await deleteLancamento(id);
+      }
+      setUltimoImportIds([]);
+      allDocs = await getLancamentos();
+      applyFilters();
+      alert("Lançamentos do último import removidos com sucesso.");
+    } catch (e) {
+      alert("Erro ao remover: " + (e.message || "tente novamente"));
+    }
+    if (btn) btn.disabled = false;
   };
 
   // Enter to filter
