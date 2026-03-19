@@ -314,7 +314,10 @@ export async function updateLancamento(id, obj) {
 export async function deleteLancamento(id) {
   try {
     await req("DELETE", "/lancamentos?id=eq." + encodeURIComponent(id));
-  } catch (e) {}
+  } catch (e) {
+    // Em modo offline: remove do cache local mesmo assim
+    console.warn("deleteLancamento: falha no servidor, removendo localmente.", e.message);
+  }
   const list = loadLocal(KEY_LANCAMENTOS).filter(x => x.id !== id);
   saveLocal(KEY_LANCAMENTOS, list);
   const pending = loadPendingLancamentos().filter(x => x.id !== id);

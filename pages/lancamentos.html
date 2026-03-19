@@ -54,6 +54,14 @@
       <select id="f-cat"><option value="">Todas</option></select>
     </div>
     <div class="filter-group">
+      <label>Origem</label>
+      <select id="f-origem">
+        <option value="">Todas</option>
+        <option value="pdf">📄 Importado PDF</option>
+        <option value="manual">✍ Manual</option>
+      </select>
+    </div>
+    <div class="filter-group">
       <label>Buscar</label>
       <input type="text" id="f-busca" placeholder="Descrição..." style="min-width:160px;" />
     </div>
@@ -75,13 +83,13 @@
         <thead>
           <tr>
             <th class="text-center" style="width:40px;"><input type="checkbox" id="select-all-lanc" title="Selecionar todos desta página" class="admin-only"></th>
-            <th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th>
+            <th>Data</th><th>Tipo</th><th>Origem</th><th>Categoria</th><th>Descrição</th>
             <th>Forma Pagto</th><th>Responsável</th><th class="text-right">Valor</th>
             <th class="text-center">Ações</th>
           </tr>
         </thead>
         <tbody id="tbody-lanc">
-          <tr><td colspan="9" class="text-center text-muted" style="padding:2rem">Carregando...</td></tr>
+          <tr><td colspan="10" class="text-center text-muted" style="padding:2rem">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -323,6 +331,7 @@
     const mes    = document.getElementById("f-mes").value;
     const ano    = document.getElementById("f-ano").value;
     const cat    = document.getElementById("f-cat").value;
+    const origem = document.getElementById("f-origem") ? document.getElementById("f-origem").value : "";
     const busca  = document.getElementById("f-busca").value.toLowerCase();
 
     filtered = allDocs.filter(d => {
@@ -330,6 +339,8 @@
       if (mes && getMes(d) !== +mes) return false;
       if (ano && getAno(d) !== +ano) return false;
       if (cat && d.categoria !== cat) return false;
+      if (origem === "pdf" && d.origem !== "pdf") return false;
+      if (origem === "manual" && (d.origem || "manual") !== "manual") return false;
       if (busca && !d.descricao?.toLowerCase().includes(busca)) return false;
       return true;
     });
@@ -351,7 +362,7 @@
 
   window.resetFilters = function() {
     const f = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-    f("f-tipo", ""); f("f-mes", ""); f("f-ano", ""); f("f-cat", ""); f("f-busca", "");
+    f("f-tipo", ""); f("f-mes", ""); f("f-ano", ""); f("f-cat", ""); f("f-origem", ""); f("f-busca", "");
     applyFilters();
   };
 
@@ -361,7 +372,7 @@
     const tbody = document.getElementById("tbody-lanc");
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">📭</div><h4>Nenhum lançamento encontrado</h4><p>Ajuste os filtros ou cadastre novos lançamentos.</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="icon">📭</div><h4>Nenhum lançamento encontrado</h4><p>Ajuste os filtros ou cadastre novos lançamentos.</p></div></td></tr>`;
       document.getElementById("pag-info").textContent = "";
       document.getElementById("pag-controls").innerHTML = "";
       updateCountSelecionados();
@@ -373,6 +384,7 @@
         <td class="text-center">${admin ? `<input type="checkbox" class="lanc-checkbox" data-id="${d.id}" ${selectedIds.has(d.id) ? "checked" : ""}>` : ""}</td>
         <td>${formatDate(d.data)}</td>
         <td><span class="badge badge-${d.tipo}">${d.tipo === "receita" ? "Receita" : "Despesa"}</span></td>
+        <td>${d.origem === "pdf" ? '<span class="badge badge-pdf">📄 PDF</span>' : '<span class="badge badge-manual">✍ Manual</span>'}</td>
         <td>${d.categoria || "—"}</td>
         <td>${d.descricao}</td>
         <td>${d.formaPagamento || "—"}</td>
@@ -449,6 +461,7 @@
         <div style="display:grid;gap:.75rem;">
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
             <div><strong>Tipo:</strong> <span class="badge badge-${d.tipo}">${d.tipo === "receita" ? "Receita" : "Despesa"}</span></div>
+            <div><strong>Origem:</strong> ${d.origem === "pdf" ? '<span class="badge badge-pdf">📄 Importado via PDF</span>' : '<span class="badge badge-manual">✍ Lançamento Manual</span>'}</div>
             <div><strong>Data:</strong> ${formatDate(d.data)}</div>
             <div><strong>Valor:</strong> <span class="val-${d.tipo}">${formatBRL(d.valor)}</span></div>
           </div>
@@ -571,11 +584,21 @@
         ano: parseInt(y, 10)
       });
       const idx = allDocs.findIndex(x => x.id === selectedId);
-      if (idx >= 0) allDocs[idx] = { ...allDocs[idx], tipo, data, valor, categoria, descricao, responsavel: responsavel || null, observacoes: observacoes || null, numeroDocumento: numDoc || null, formaPagamento: formaPagto || null, mes: parseInt(m, 10), ano: parseInt(y, 10) };
+      if (idx >= 0) {
+        // Preserve campos não editáveis como origem, criadoPor, criadoEm, etc.
+        allDocs[idx] = {
+          ...allDocs[idx],
+          tipo, data, valor, categoria, descricao,
+          responsavel: responsavel || null,
+          observacoes: observacoes || null,
+          numeroDocumento: numDoc || null,
+          formaPagamento: formaPagto || null,
+          mes: parseInt(m, 10),
+          ano: parseInt(y, 10)
+        };
+      }
       window.closeModal("modal-editar");
       applyFilters();
-      alertEl.textContent = "✅ Lançamento atualizado!";
-      alertEl.className = "alert alert-success";
     } catch (e) {
       alertEl.textContent = "Erro ao salvar: " + (e.message || "tente novamente");
       alertEl.className = "alert alert-error";
@@ -617,11 +640,7 @@
   window.apagarUmLancamento = async function(id) {
     if (!id) return;
     if (!confirm("Excluir este lançamento? Esta ação não pode ser desfeita.")) return;
-    try {
-      await deleteLancamento(id);
-    } catch(e) {
-      alert("Erro ao excluir no servidor: " + (e.message || "verifique a conexão"));
-    }
+    await deleteLancamento(id);
     allDocs = allDocs.filter(d => d.id !== id);
     selectedIds.delete(id);
     applyFilters();
