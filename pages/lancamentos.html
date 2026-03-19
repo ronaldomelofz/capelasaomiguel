@@ -175,6 +175,14 @@
         <div class="form-section-title">Prévia (<span id="import-count">0</span> lançamentos) — edite antes de importar</div>
         <table style="width:100%;font-size:.8rem;"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="text-right">Valor</th><th class="text-center">Ações</th></tr></thead><tbody id="import-preview-body"></tbody></table>
       </div>
+      <div id="import-progress" class="hidden" style="margin-top:1rem;padding:.75rem;background:#e8edf8;border:1px solid #c5d0e8;border-radius:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;font-size:.9rem;">
+          <span id="import-progress-text">Importando... 0 de 0 (0%)</span>
+        </div>
+        <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
+          <div id="import-progress-bar" style="height:100%;width:0%;background:var(--navy);transition:width .2s ease;"></div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-importar')">Cancelar</button>
@@ -766,6 +774,7 @@
     document.getElementById("import-alert").className = "alert hidden";
     document.getElementById("import-preview").classList.add("hidden");
     document.getElementById("import-duplicados").classList.add("hidden");
+    document.getElementById("import-progress").classList.add("hidden");
     document.getElementById("btn-confirmar-import").disabled = true;
     document.getElementById("modal-importar").classList.add("open");
   };
@@ -824,14 +833,22 @@
   window.confirmarImportacao = async function() {
     if (!lancamentosParaImportar.length) return;
     const btn = document.getElementById("btn-confirmar-import");
+    const progressEl = document.getElementById("import-progress");
+    const progressText = document.getElementById("import-progress-text");
+    const progressBar = document.getElementById("import-progress-bar");
     btn.disabled = true;
     const total = lancamentosParaImportar.length;
     const alertEl = document.getElementById("import-alert");
+    alertEl.classList.add("hidden");
+    if (progressEl) progressEl.classList.remove("hidden");
     let ok = 0, err = 0;
     const idsImportados = [];
     const catReceita = "Outras Receitas", catDespesa = "Outras Despesas";
     for (let i = 0; i < lancamentosParaImportar.length; i++) {
-      const pct = Math.round(((i + 1) / total) * 100);
+      const atual = i + 1;
+      const pct = Math.round((atual / total) * 100);
+      if (progressText) progressText.textContent = `Importando... ${atual} de ${total} (${pct}%)`;
+      if (progressBar) progressBar.style.width = pct + "%";
       btn.textContent = `Importando... ${pct}%`;
       const l = lancamentosParaImportar[i];
       try {
@@ -859,6 +876,8 @@
     }
     btn.textContent = "💾 Importar";
     btn.disabled = false;
+    if (progressEl) progressEl.classList.add("hidden");
+    if (progressBar) progressBar.style.width = "0%";
     if (idsImportados.length) setUltimoImportIds(idsImportados);
     alertEl.textContent = `✅ ${ok} lançamento(s) importado(s).${err ? ` ${err} falha(s).` : ""}`;
     alertEl.className = "alert alert-success";
