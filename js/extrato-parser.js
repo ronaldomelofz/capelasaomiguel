@@ -52,13 +52,12 @@ export function extrairLancamentosDoTexto(text) {
     if (EXCLUIR_PALAVRAS.some((p) => historicoLower.includes(p))) continue;
     if (EXCLUIR_REGEX.test(bloco)) continue;
 
+    // Preservar TODO o texto do histórico (incluindo documentos, IDs, descrições completas)
     let historico = bloco
       .replace(VALOR_REGEX, "")
-      .replace(DATA_REGEX, "")
-      .replace(/\d{4,}\s*/g, (m) => "")
+      .replace(/^\s*\d{2}\/\d{2}\/\d{4}\s*/, "")
       .replace(/\s+/g, " ")
       .trim();
-    historico = historico.replace(/^\d+\s+/, "").trim();
 
     const docMatch = bloco.match(/\b(\d{10,20})\b/);
     const numeroDocumento = docMatch ? docMatch[1] : null;
