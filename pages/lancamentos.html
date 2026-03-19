@@ -165,6 +165,12 @@
         <label>Selecione o arquivo PDF do extrato bancário</label>
         <input type="file" id="import-file" accept=".pdf" />
       </div>
+      <div id="import-duplicados" class="hidden" style="margin-top:.75rem;padding:.75rem;background:var(--red-light);border:1px solid var(--red);border-radius:8px;">
+        <div style="font-weight:600;margin-bottom:.5rem;">⚠️ Arquivo já importado</div>
+        <p style="font-size:.9rem;margin:0 0 .75rem 0;">Este PDF contém <strong id="import-duplicados-count">0</strong> lançamento(s) que já existem no sistema. A importação está bloqueada.</p>
+        <p style="font-size:.85rem;margin:0 0 .75rem 0;color:var(--text-muted);">Para importar novamente, limpe os dados existentes:</p>
+        <button class="btn btn-outline btn-sm" id="btn-limpar-duplicados" onclick="limparDuplicadosImportacao()">🗑 Limpar dados existentes e permitir importação</button>
+      </div>
       <div id="import-preview" class="hidden" style="max-height:320px;overflow-y:auto;margin-top:.75rem;font-size:.85rem;">
         <div class="form-section-title">Prévia (<span id="import-count">0</span> lançamentos) — edite antes de importar</div>
         <table style="width:100%;font-size:.8rem;"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="text-right">Valor</th><th class="text-center">Ações</th></tr></thead><tbody id="import-preview-body"></tbody></table>
@@ -569,6 +575,78 @@
     if (btn) btn.style.display = ids.length && admin ? "inline-flex" : "none";
   }
 
+  function isDuplicadoImport(ext, db) {
+    if (ext.data !== db.data) return false;
+    const vExt = Number(ext.valor);
+    const vDb = Number(db.valor);
+    if (isNaN(vExt) || isNaN(vDb) || Math.abs(vExt - vDb) > 0.01) return false;
+    if (ext.numeroDocumento && db.numeroDocumento && String(ext.numeroDocumento).trim() === String(db.numeroDocumento).trim()) return true;
+    const descExt = (ext.descricao || "").trim();
+    const descDb = (db.descricao || "").trim();
+    if (descExt && descDb) {
+      const a = descExt.slice(0, 60);
+      const b = descDb.slice(0, 60);
+      return a === b || a.includes(b) || b.includes(a);
+    }
+    return false;
+  }
+
+  function verificarDuplicadosImportacao() {
+    const duplicados = [];
+    for (const ext of lancamentosParaImportar) {
+      for (const db of allDocs) {
+        if (isDuplicadoImport(ext, db)) {
+          duplicados.push(db);
+          break;
+        }
+      }
+    }
+    return duplicados;
+  }
+
+  function atualizarUIduplicados(duplicados) {
+    const divDup = document.getElementById("import-duplicados");
+    const btnImport = document.getElementById("btn-confirmar-import");
+    if (!divDup || !btnImport) return;
+    if (duplicados.length > 0) {
+      divDup.classList.remove("hidden");
+      document.getElementById("import-duplicados-count").textContent = duplicados.length;
+      btnImport.disabled = true;
+    } else {
+      divDup.classList.add("hidden");
+      btnImport.disabled = false;
+    }
+  }
+
+  window.limparDuplicadosImportacao = async function() {
+    const duplicados = verificarDuplicadosImportacao();
+    if (!duplicados.length) {
+      atualizarUIduplicados([]);
+      return;
+    }
+    if (!confirm(`Remover ${duplicados.length} lançamento(s) já importados para permitir a nova importação? Esta ação não pode ser desfeita.`)) return;
+    const btn = document.getElementById("btn-limpar-duplicados");
+    if (btn) btn.disabled = true;
+    try {
+      for (const d of duplicados) {
+        await deleteLancamento(d.id);
+      }
+      allDocs = await getLancamentos();
+      applyFilters();
+      const duplicadosRestantes = verificarDuplicadosImportacao();
+      atualizarUIduplicados(duplicadosRestantes);
+      if (!duplicadosRestantes.length) {
+        const alertEl = document.getElementById("import-alert");
+        alertEl.textContent = "✅ Dados duplicados removidos. Você pode importar agora.";
+        alertEl.className = "alert alert-success";
+        alertEl.classList.remove("hidden");
+      }
+    } catch (e) {
+      alert("Erro ao remover: " + (e.message || "tente novamente"));
+    }
+    if (btn) btn.disabled = false;
+  };
+
   function renderImportPreview() {
     const tbody = document.getElementById("import-preview-body");
     if (!tbody) return;
@@ -687,6 +765,7 @@
     document.getElementById("import-file").value = "";
     document.getElementById("import-alert").className = "alert hidden";
     document.getElementById("import-preview").classList.add("hidden");
+    document.getElementById("import-duplicados").classList.add("hidden");
     document.getElementById("btn-confirmar-import").disabled = true;
     document.getElementById("modal-importar").classList.add("open");
   };
@@ -731,7 +810,9 @@
       document.getElementById("import-count").textContent = lancamentosParaImportar.length;
       renderImportPreview();
       document.getElementById("import-preview").classList.remove("hidden");
-      document.getElementById("btn-confirmar-import").disabled = false;
+      allDocs = await getLancamentos();
+      const duplicados = verificarDuplicadosImportacao();
+      atualizarUIduplicados(duplicados);
     } catch (err) {
       alertEl.textContent = "Erro ao ler PDF: " + (err.message || "tente outro arquivo");
       alertEl.className = "alert alert-error";
