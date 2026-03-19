@@ -11,6 +11,7 @@
 <div class="topbar">
   <span class="topbar-title">📒 Lançamentos</span>
   <div class="topbar-actions">
+    <button class="btn btn-outline admin-only" onclick="abrirModalImportar()">📥 Importar Extrato</button>
     <a href="novo.html" class="btn btn-success admin-only">+ Novo</a>
   </div>
 </div>
@@ -150,12 +151,39 @@
   </div>
 </div>
 
+<!-- Modal Importar Extrato -->
+<div class="modal-overlay" id="modal-importar">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3>📥 Importar Extrato (PDF)</h3>
+      <button class="modal-close" onclick="closeModal('modal-importar')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="import-alert" class="alert hidden"></div>
+      <div class="form-group">
+        <label>Selecione o arquivo PDF do extrato bancário</label>
+        <input type="file" id="import-file" accept=".pdf" />
+      </div>
+      <div id="import-preview" class="hidden" style="max-height:200px;overflow-y:auto;margin-top:.75rem;font-size:.85rem;">
+        <div class="form-section-title">Prévia (<span id="import-count">0</span> lançamentos)</div>
+        <table style="width:100%;font-size:.8rem;"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="text-right">Valor</th></tr></thead><tbody id="import-preview-body"></tbody></table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-importar')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btn-confirmar-import" onclick="confirmarImportacao()" disabled>💾 Importar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
   /* v2 - loadAll antes de auth, sem return no top-level */
   import { requireAuth, isAdmin, formatBRL, formatDate, formatDatetime } from "../js/auth.js";
   import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA, FORMAS_PAGAMENTO_PADRAO } from "../js/config.js";
   import { renderLayout } from "../js/layout.js";
-  import { getLancamentos, deleteLancamento, updateLancamento, getCategoriasCustom, getFormasPagamentoCustom } from "../js/api.js";
+  import { getLancamentos, deleteLancamento, updateLancamento, addLancamento, getCategoriasCustom, getFormasPagamentoCustom } from "../js/api.js";
+  import { extrairLancamentosDoTexto } from "../js/extrato-parser.js";
 
   function showError(msg) {
     const tbody = document.getElementById("tbody-lanc");
@@ -463,6 +491,105 @@
   };
 
   window.closeModal = id => document.getElementById(id).classList.remove("open");
+
+  let lancamentosParaImportar = [];
+
+  window.abrirModalImportar = function() {
+    lancamentosParaImportar = [];
+    document.getElementById("import-file").value = "";
+    document.getElementById("import-alert").className = "alert hidden";
+    document.getElementById("import-preview").classList.add("hidden");
+    document.getElementById("btn-confirmar-import").disabled = true;
+    document.getElementById("modal-importar").classList.add("open");
+  };
+
+  document.getElementById("import-file").addEventListener("change", async function(e) {
+    const file = e.target.files[0];
+    if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
+      const alertEl = document.getElementById("import-alert");
+      alertEl.textContent = "Selecione um arquivo PDF.";
+      alertEl.className = "alert alert-error";
+      return;
+    }
+    const alertEl = document.getElementById("import-alert");
+    alertEl.textContent = "Processando PDF...";
+    alertEl.className = "alert alert-info";
+    alertEl.classList.remove("hidden");
+    try {
+      if (typeof pdfjsLib === "undefined") throw new Error("Biblioteca PDF não carregada.");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      const buf = await file.arrayBuffer();
+      const doc = await pdfjsLib.getDocument(buf).promise;
+      let fullText = "";
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const text = await page.getTextContent();
+        fullText += text.items.map((x) => x.str).join(" ") + " ";
+      }
+      lancamentosParaImportar = extrairLancamentosDoTexto(fullText);
+      if (lancamentosParaImportar.length === 0) {
+        alertEl.textContent = "Nenhum lançamento encontrado no PDF. Verifique o formato.";
+        alertEl.className = "alert alert-error";
+        document.getElementById("import-preview").classList.add("hidden");
+        document.getElementById("btn-confirmar-import").disabled = true;
+        return;
+      }
+      alertEl.classList.add("hidden");
+      document.getElementById("import-count").textContent = lancamentosParaImportar.length;
+      const tbody = document.getElementById("import-preview-body");
+      tbody.innerHTML = lancamentosParaImportar.slice(0, 15).map((l) =>
+        `<tr><td>${l.data}</td><td><span class="badge badge-${l.tipo}">${l.tipo === "receita" ? "Receita" : "Despesa"}</span></td><td>${(l.descricao || "").slice(0, 40)}...</td><td class="text-right val-${l.tipo}">${formatBRL(l.valor)}</td></tr>`
+      ).join("");
+      if (lancamentosParaImportar.length > 15) tbody.innerHTML += `<tr><td colspan="4" class="text-muted">... e mais ${lancamentosParaImportar.length - 15} lançamentos</td></tr>`;
+      document.getElementById("import-preview").classList.remove("hidden");
+      document.getElementById("btn-confirmar-import").disabled = false;
+    } catch (err) {
+      alertEl.textContent = "Erro ao ler PDF: " + (err.message || "tente outro arquivo");
+      alertEl.className = "alert alert-error";
+      document.getElementById("import-preview").classList.add("hidden");
+      document.getElementById("btn-confirmar-import").disabled = true;
+    }
+  });
+
+  window.confirmarImportacao = async function() {
+    if (!lancamentosParaImportar.length) return;
+    const btn = document.getElementById("btn-confirmar-import");
+    btn.disabled = true;
+    btn.textContent = "Importando...";
+    const alertEl = document.getElementById("import-alert");
+    let ok = 0, err = 0;
+    const catReceita = "Outras Receitas", catDespesa = "Outras Despesas";
+    for (const l of lancamentosParaImportar) {
+      try {
+        const [y, m] = l.data.split("-");
+        await addLancamento({
+          tipo: l.tipo,
+          data: l.data,
+          valor: l.valor,
+          categoria: l.tipo === "receita" ? catReceita : catDespesa,
+          descricao: l.descricao,
+          observacoes: l.observacoes,
+          numeroDocumento: l.numeroDocumento,
+          formaPagamento: "PIX",
+          mes: parseInt(m, 10),
+          ano: parseInt(y, 10),
+          criadoPor: authResult?.user?.uid ?? null,
+          criadoPorEmail: authResult?.user?.email ?? null,
+        });
+        ok++;
+      } catch (e) {
+        err++;
+      }
+    }
+    btn.textContent = "💾 Importar";
+    btn.disabled = false;
+    alertEl.textContent = `✅ ${ok} lançamento(s) importado(s).${err ? ` ${err} falha(s).` : ""}`;
+    alertEl.className = "alert alert-success";
+    alertEl.classList.remove("hidden");
+    allDocs = await getLancamentos();
+    applyFilters();
+    setTimeout(() => { closeModal("modal-importar"); }, 1500);
+  };
 
   // Enter to filter
   const fBusca = document.getElementById("f-busca");
