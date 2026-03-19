@@ -596,6 +596,11 @@
     alert("Lançamento excluído com sucesso.");
   };
 
+  function updateCountSelecionados() {
+    const el = document.getElementById("count-selecionados");
+    if (el) el.textContent = selectedIds.size;
+  }
+
   window.toggleDropdownApagar = function(e) {
     if (e) e.stopPropagation();
     const menu = document.getElementById("dropdown-apagar-menu");
@@ -657,24 +662,6 @@
     applyFilters();
     updateCountSelecionados();
     alert(lista.length + " lançamento(s) excluído(s) com sucesso.");
-  };
-
-  window.apagarUltimoImport = async function() {
-    const ids = getUltimoImportIds();
-    if (!ids.length) return;
-    if (!confirm(`Remover ${ids.length} lançamento(s) do último PDF importado? Esta ação não pode ser desfeita.`)) return;
-    const btn = document.getElementById("btn-apagar-ultimo-import");
-    if (btn) btn.disabled = true;
-    try {
-      for (const id of ids) { await deleteLancamento(id); }
-      setUltimoImportIds([]);
-      allDocs = await getLancamentos();
-      applyFilters();
-      alert("Lançamentos do último import removidos com sucesso.");
-    } catch (e) {
-      alert("Erro ao remover: " + (e.message || "tente novamente"));
-    }
-    if (btn) btn.disabled = false;
   };
 
   let lancamentosParaImportar = [];
