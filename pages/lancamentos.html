@@ -164,14 +164,73 @@
         <label>Selecione o arquivo PDF do extrato bancário</label>
         <input type="file" id="import-file" accept=".pdf" />
       </div>
-      <div id="import-preview" class="hidden" style="max-height:200px;overflow-y:auto;margin-top:.75rem;font-size:.85rem;">
-        <div class="form-section-title">Prévia (<span id="import-count">0</span> lançamentos)</div>
-        <table style="width:100%;font-size:.8rem;"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="text-right">Valor</th></tr></thead><tbody id="import-preview-body"></tbody></table>
+      <div id="import-preview" class="hidden" style="max-height:320px;overflow-y:auto;margin-top:.75rem;font-size:.85rem;">
+        <div class="form-section-title">Prévia (<span id="import-count">0</span> lançamentos) — edite antes de importar</div>
+        <table style="width:100%;font-size:.8rem;"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="text-right">Valor</th><th class="text-center">Ações</th></tr></thead><tbody id="import-preview-body"></tbody></table>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-importar')">Cancelar</button>
       <button class="btn btn-primary btn-sm" id="btn-confirmar-import" onclick="confirmarImportacao()" disabled>💾 Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Lançamento da Importação -->
+<div class="modal-overlay" id="modal-editar-import">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3>✏️ Editar Lançamento</h3>
+      <button class="modal-close" onclick="closeModal('modal-editar-import')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="import-edit-alert" class="alert hidden"></div>
+      <div class="form-section-title">Tipo de Lançamento</div>
+      <div class="tipo-selector">
+        <button class="tipo-btn receita selected" id="imp-btn-receita" onclick="impSetTipo('receita')">📈 Receita</button>
+        <button class="tipo-btn despesa" id="imp-btn-despesa" onclick="impSetTipo('despesa')">📉 Despesa</button>
+      </div>
+      <input type="hidden" id="imp-tipo" value="receita" />
+      <div class="form-section-title mt-2">Dados do Lançamento</div>
+      <div class="form-row cols-2">
+        <div class="form-group">
+          <label>Data *</label>
+          <input type="date" id="imp-data" />
+        </div>
+        <div class="form-group">
+          <label>Valor (R$) *</label>
+          <input type="text" id="imp-valor" placeholder="0,00" inputmode="decimal" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Categoria *</label>
+        <select id="imp-categoria"></select>
+      </div>
+      <div class="form-group">
+        <label>Descrição *</label>
+        <input type="text" id="imp-descricao" maxlength="200" />
+      </div>
+      <div class="form-group">
+        <label>Responsável</label>
+        <input type="text" id="imp-responsavel" placeholder="Nome do responsável (opcional)" />
+      </div>
+      <div class="form-section-title mt-2">Observações e Comprovante</div>
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea id="imp-observacoes" rows="3" placeholder="Informações adicionais..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Nº do Documento / Recibo</label>
+        <input type="text" id="imp-numero-doc" placeholder="Ex: NF 0001, Recibo 123..." />
+      </div>
+      <div class="form-group">
+        <label>Forma de Pagamento</label>
+        <select id="imp-forma-pagto"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-editar-import')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btn-salvar-import-edit" onclick="salvarEdicaoImport()">💾 Salvar</button>
     </div>
   </div>
 </div>
@@ -493,6 +552,120 @@
   window.closeModal = id => document.getElementById(id).classList.remove("open");
 
   let lancamentosParaImportar = [];
+  let impEditIdx = -1;
+
+  function renderImportPreview() {
+    const tbody = document.getElementById("import-preview-body");
+    if (!tbody) return;
+    tbody.innerHTML = lancamentosParaImportar.map((l, idx) =>
+      `<tr>
+        <td>${l.data}</td>
+        <td><span class="badge badge-${l.tipo}">${l.tipo === "receita" ? "Receita" : "Despesa"}</span></td>
+        <td>${(l.descricao || "").slice(0, 50)}${(l.descricao || "").length > 50 ? "…" : ""}</td>
+        <td class="text-right val-${l.tipo}">${formatBRL(l.valor)}</td>
+        <td class="text-center"><button class="btn btn-outline btn-sm" onclick="openEdicaoImport(${idx})">✏️ Editar</button></td>
+      </tr>`
+    ).join("");
+  }
+
+  async function populateImpCategorias(tipo) {
+    const sel = document.getElementById("imp-categoria");
+    if (!sel) return;
+    const defaults = tipo === "receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
+    try {
+      const custom = (await getCategoriasCustom()).filter(c => c.tipo === tipo).map(c => c.nome);
+      sel.innerHTML = '<option value="">— Selecione a categoria —</option>';
+      [...defaults, ...custom].forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    } catch (e) {
+      sel.innerHTML = '<option value="">— Selecione a categoria —</option>';
+      defaults.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    }
+  }
+
+  async function populateImpFormas() {
+    const sel = document.getElementById("imp-forma-pagto");
+    if (!sel) return;
+    try {
+      const custom = (await getFormasPagamentoCustom()).map(f => f.nome);
+      const formas = [...FORMAS_PAGAMENTO_PADRAO, ...custom];
+      sel.innerHTML = '<option value="">— Selecione —</option>';
+      formas.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
+    } catch (e) {
+      sel.innerHTML = '<option value="">— Selecione —</option>';
+      FORMAS_PAGAMENTO_PADRAO.forEach(f => { const o = document.createElement("option"); o.value = f; o.textContent = f; sel.appendChild(o); });
+    }
+  }
+
+  window.impSetTipo = function(tipo) {
+    document.getElementById("imp-tipo").value = tipo;
+    document.getElementById("imp-btn-receita").className = "tipo-btn receita " + (tipo === "receita" ? "selected" : "");
+    document.getElementById("imp-btn-despesa").className = "tipo-btn despesa " + (tipo === "despesa" ? "selected" : "");
+    populateImpCategorias(tipo);
+  };
+
+  window.openEdicaoImport = async function(idx) {
+    impEditIdx = idx;
+    const l = lancamentosParaImportar[idx];
+    if (!l) return;
+    await populateImpCategorias(l.tipo);
+    await populateImpFormas();
+    impSetTipo(l.tipo);
+    document.getElementById("imp-data").value = l.data || "";
+    document.getElementById("imp-valor").value = l.valor ? Number(l.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+    document.getElementById("imp-categoria").value = l.categoria || "";
+    document.getElementById("imp-descricao").value = l.descricao || "";
+    document.getElementById("imp-responsavel").value = l.responsavel || "";
+    document.getElementById("imp-observacoes").value = l.observacoes || "";
+    document.getElementById("imp-numero-doc").value = l.numeroDocumento || "";
+    document.getElementById("imp-forma-pagto").value = l.formaPagamento || "";
+    document.getElementById("import-edit-alert").className = "alert hidden";
+    document.getElementById("modal-editar-import").classList.add("open");
+  };
+
+  window.salvarEdicaoImport = function() {
+    const alertEl = document.getElementById("import-edit-alert");
+    alertEl.className = "alert hidden";
+    const tipo = document.getElementById("imp-tipo").value;
+    const data = document.getElementById("imp-data").value;
+    const valorRaw = document.getElementById("imp-valor").value.replace(/\./g, "").replace(",", ".");
+    const valor = parseFloat(valorRaw);
+    const categoria = document.getElementById("imp-categoria").value;
+    const descricao = document.getElementById("imp-descricao").value.trim();
+    const responsavel = document.getElementById("imp-responsavel").value.trim();
+    const observacoes = document.getElementById("imp-observacoes").value.trim();
+    const numDoc = document.getElementById("imp-numero-doc").value.trim();
+    const formaPagto = document.getElementById("imp-forma-pagto").value;
+    if (!data || !valor || !categoria || !descricao) {
+      alertEl.textContent = "Preencha todos os campos obrigatórios (*).";
+      alertEl.className = "alert alert-error";
+      return;
+    }
+    if (isNaN(valor) || valor <= 0) {
+      alertEl.textContent = "Informe um valor válido e maior que zero.";
+      alertEl.className = "alert alert-error";
+      return;
+    }
+    lancamentosParaImportar[impEditIdx] = {
+      ...lancamentosParaImportar[impEditIdx],
+      tipo, data, valor, categoria, descricao,
+      responsavel: responsavel || null,
+      observacoes: observacoes || null,
+      numeroDocumento: numDoc || null,
+      formaPagamento: formaPagto || null,
+    };
+    closeModal("modal-editar-import");
+    renderImportPreview();
+  };
+
+  const impValorEl = document.getElementById("imp-valor");
+  if (impValorEl) {
+    impValorEl.addEventListener("input", function() {
+      let v = this.value.replace(/\D/g, "");
+      if (!v) { this.value = ""; return; }
+      v = (parseInt(v, 10) / 100).toFixed(2);
+      this.value = parseFloat(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    });
+  }
 
   window.abrirModalImportar = function() {
     lancamentosParaImportar = [];
@@ -526,7 +699,12 @@
         const text = await page.getTextContent();
         fullText += text.items.map((x) => x.str || "").join(" ") + " ";
       }
-      lancamentosParaImportar = extrairLancamentosDoTexto(fullText);
+      lancamentosParaImportar = extrairLancamentosDoTexto(fullText).map((l) => ({
+        ...l,
+        categoria: l.tipo === "receita" ? "Outras Receitas" : "Outras Despesas",
+        formaPagamento: "PIX",
+        responsavel: null,
+      }));
       if (lancamentosParaImportar.length === 0) {
         alertEl.textContent = "Nenhum lançamento encontrado no PDF. Verifique o formato.";
         alertEl.className = "alert alert-error";
@@ -536,11 +714,7 @@
       }
       alertEl.classList.add("hidden");
       document.getElementById("import-count").textContent = lancamentosParaImportar.length;
-      const tbody = document.getElementById("import-preview-body");
-      tbody.innerHTML = lancamentosParaImportar.slice(0, 15).map((l) =>
-        `<tr><td>${l.data}</td><td><span class="badge badge-${l.tipo}">${l.tipo === "receita" ? "Receita" : "Despesa"}</span></td><td>${(l.descricao || "").slice(0, 40)}...</td><td class="text-right val-${l.tipo}">${formatBRL(l.valor)}</td></tr>`
-      ).join("");
-      if (lancamentosParaImportar.length > 15) tbody.innerHTML += `<tr><td colspan="4" class="text-muted">... e mais ${lancamentosParaImportar.length - 15} lançamentos</td></tr>`;
+      renderImportPreview();
       document.getElementById("import-preview").classList.remove("hidden");
       document.getElementById("btn-confirmar-import").disabled = false;
     } catch (err) {
@@ -566,11 +740,12 @@
           tipo: l.tipo,
           data: l.data,
           valor: l.valor,
-          categoria: l.tipo === "receita" ? catReceita : catDespesa,
+          categoria: l.categoria || (l.tipo === "receita" ? catReceita : catDespesa),
           descricao: l.descricao,
+          responsavel: l.responsavel || null,
           observacoes: l.observacoes,
           numeroDocumento: l.numeroDocumento,
-          formaPagamento: "PIX",
+          formaPagamento: l.formaPagamento || "PIX",
           mes: parseInt(m, 10),
           ano: parseInt(y, 10),
           criadoPor: authResult?.user?.uid ?? null,
