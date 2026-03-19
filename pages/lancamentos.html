@@ -729,11 +729,14 @@
     if (!lancamentosParaImportar.length) return;
     const btn = document.getElementById("btn-confirmar-import");
     btn.disabled = true;
-    btn.textContent = "Importando...";
+    const total = lancamentosParaImportar.length;
     const alertEl = document.getElementById("import-alert");
     let ok = 0, err = 0;
     const catReceita = "Outras Receitas", catDespesa = "Outras Despesas";
-    for (const l of lancamentosParaImportar) {
+    for (let i = 0; i < lancamentosParaImportar.length; i++) {
+      const pct = Math.round(((i + 1) / total) * 100);
+      btn.textContent = `Importando... ${pct}%`;
+      const l = lancamentosParaImportar[i];
       try {
         const [y, m] = l.data.split("-");
         await addLancamento({
