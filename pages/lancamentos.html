@@ -379,9 +379,9 @@
         <td>${d.responsavel || "—"}</td>
         <td class="text-right val-${d.tipo}">${formatBRL(d.valor)}</td>
         <td class="text-center">
-          <button type="button" class="btn btn-outline btn-sm btn-acao-lanc" data-acao="ver" data-id="${d.id}">👁 Ver</button>
-          ${admin ? `<button type="button" class="btn btn-outline btn-sm btn-acao-lanc" data-acao="editar" data-id="${d.id}">✏️ Editar</button>` : ""}
-          ${admin ? `<button type="button" class="btn btn-outline btn-sm btn-acao-lanc" data-acao="excluir" data-id="${d.id}">🗑 Excluir</button>` : ""}
+          <button type="button" class="btn btn-outline btn-sm" onclick="window.openDetalhe('${d.id}')">👁 Ver</button>
+          ${admin ? `<button type="button" class="btn btn-outline btn-sm" onclick="window.openEdicao('${d.id}')">✏️ Editar</button>` : ""}
+          ${admin ? `<button type="button" class="btn btn-outline btn-sm" onclick="window.apagarUmLancamento('${d.id}')">🗑 Excluir</button>` : ""}
         </td>
       </tr>`).join("");
 
@@ -429,47 +429,43 @@
       }
     }
 
-    loadAll();
-    const authResult = await requireAuth();
-    if (authResult) {
-      admin = isAdmin(authResult.profile);
-      applyFilters();
-      setUltimoImportIds(getUltimoImportIds());
-    }
+    // ===== FUNÇÕES DE AÇÃO (definidas antes de loadAll para estar sempre disponíveis) =====
 
-  window.goPage = function(p) { currentPage = p; renderPage(); };
+    window.goPage = function(p) { currentPage = p; renderPage(); };
 
-  window.openDetalhe = function(id) {
-    const d = allDocs.find(x => x.id === id);
-    if (!d) return;
-    selectedId = id;
+    window.closeModal = function(id) { const el = document.getElementById(id); if (el) el.classList.remove("open"); };
 
-    const excluirBtn = document.getElementById("btn-excluir");
-    const editarBtn = document.getElementById("btn-editar");
-    if (excluirBtn) excluirBtn.style.display = admin ? "inline-flex" : "none";
-    if (editarBtn) editarBtn.style.display = admin ? "inline-flex" : "none";
+    window.openDetalhe = function(id) {
+      const d = allDocs.find(x => x.id === id);
+      if (!d) { console.warn("openDetalhe: id não encontrado", id); return; }
+      selectedId = id;
 
-    document.getElementById("modal-detalhe-body").innerHTML = `
-      <div style="display:grid;gap:.75rem;">
-        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-          <div><strong>Tipo:</strong> <span class="badge badge-${d.tipo}">${d.tipo === "receita" ? "Receita" : "Despesa"}</span></div>
-          <div><strong>Data:</strong> ${formatDate(d.data)}</div>
-          <div><strong>Valor:</strong> <span class="val-${d.tipo}">${formatBRL(d.valor)}</span></div>
-        </div>
-        <div><strong>Categoria:</strong> ${d.categoria || "—"}</div>
-        <div><strong>Descrição:</strong> ${d.descricao}</div>
-        <div><strong>Forma de Pagamento:</strong> ${d.formaPagamento || "—"}</div>
-        <div><strong>Responsável:</strong> ${d.responsavel || "—"}</div>
-        <div><strong>Nº Documento:</strong> ${d.numeroDocumento || "—"}</div>
-        ${d.observacoes ? `<div><strong>Observações:</strong><br/><em style="color:var(--text-muted)">${d.observacoes}</em></div>` : ""}
-        <hr style="border:none;border-top:1px solid var(--border)"/>
-        <div style="font-size:.8rem;color:var(--text-muted)">
-          <div>Cadastrado por: ${d.criadoPorEmail || "—"}</div>
-          <div>Em: ${d.criadoEm ? formatDatetime(d.criadoEm) : "—"}</div>
-        </div>
-      </div>`;
-    document.getElementById("modal-detalhe").classList.add("open");
-  };
+      const excluirBtn = document.getElementById("btn-excluir");
+      const editarBtn = document.getElementById("btn-editar");
+      if (excluirBtn) excluirBtn.style.display = admin ? "inline-flex" : "none";
+      if (editarBtn) editarBtn.style.display = admin ? "inline-flex" : "none";
+
+      document.getElementById("modal-detalhe-body").innerHTML = `
+        <div style="display:grid;gap:.75rem;">
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+            <div><strong>Tipo:</strong> <span class="badge badge-${d.tipo}">${d.tipo === "receita" ? "Receita" : "Despesa"}</span></div>
+            <div><strong>Data:</strong> ${formatDate(d.data)}</div>
+            <div><strong>Valor:</strong> <span class="val-${d.tipo}">${formatBRL(d.valor)}</span></div>
+          </div>
+          <div><strong>Categoria:</strong> ${d.categoria || "—"}</div>
+          <div><strong>Descrição:</strong> ${d.descricao}</div>
+          <div><strong>Forma de Pagamento:</strong> ${d.formaPagamento || "—"}</div>
+          <div><strong>Responsável:</strong> ${d.responsavel || "—"}</div>
+          <div><strong>Nº Documento:</strong> ${d.numeroDocumento || "—"}</div>
+          ${d.observacoes ? `<div><strong>Observações:</strong><br/><em style="color:var(--text-muted)">${d.observacoes}</em></div>` : ""}
+          <hr style="border:none;border-top:1px solid var(--border)"/>
+          <div style="font-size:.8rem;color:var(--text-muted)">
+            <div>Cadastrado por: ${d.criadoPorEmail || "—"}</div>
+            <div>Em: ${d.criadoEm ? formatDatetime(d.criadoEm) : "—"}</div>
+          </div>
+        </div>`;
+      document.getElementById("modal-detalhe").classList.add("open");
+    };
 
   async function populateEditFormas() {
     const sel = document.getElementById("edit-forma-pagto");
@@ -504,7 +500,7 @@
     const d = allDocs.find(x => x.id === lid);
     if (!d) return;
     selectedId = lid;
-    closeModal("modal-detalhe");
+    window.closeModal("modal-detalhe");
 
     await populateEditCategorias(d.tipo);
     await populateEditFormas();
@@ -576,7 +572,7 @@
       });
       const idx = allDocs.findIndex(x => x.id === selectedId);
       if (idx >= 0) allDocs[idx] = { ...allDocs[idx], tipo, data, valor, categoria, descricao, responsavel: responsavel || null, observacoes: observacoes || null, numeroDocumento: numDoc || null, formaPagamento: formaPagto || null, mes: parseInt(m, 10), ano: parseInt(y, 10) };
-      closeModal("modal-editar");
+      window.closeModal("modal-editar");
       applyFilters();
       alertEl.textContent = "✅ Lançamento atualizado!";
       alertEl.className = "alert alert-success";
@@ -590,28 +586,27 @@
   window.excluirLancamento = async function() {
     if (!selectedId) return;
     if (!confirm("Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.")) return;
-    await deleteLancamento(selectedId);
+    try {
+      await deleteLancamento(selectedId);
+    } catch(e) {}
     allDocs = allDocs.filter(d => d.id !== selectedId);
     selectedIds.delete(selectedId);
-    closeModal("modal-detalhe");
+    window.closeModal("modal-detalhe");
     applyFilters();
     alert("Lançamento excluído com sucesso.");
   };
 
-  function updateCountSelecionados() {
-    const el = document.getElementById("count-selecionados");
-    if (el) el.textContent = selectedIds.size;
-  }
-
   window.toggleDropdownApagar = function(e) {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     const menu = document.getElementById("dropdown-apagar-menu");
     if (menu) menu.classList.toggle("hidden");
   };
 
-  document.addEventListener("click", function() {
-    const menu = document.getElementById("dropdown-apagar-menu");
-    if (menu && !menu.classList.contains("hidden")) menu.classList.add("hidden");
+  document.addEventListener("click", function(e) {
+    if (!e.target.closest("#dropdown-apagar-menu") && !e.target.closest("#btn-apagar-varios")) {
+      const menu = document.getElementById("dropdown-apagar-menu");
+      if (menu && !menu.classList.contains("hidden")) menu.classList.add("hidden");
+    }
   });
 
   window.apagarUmLancamento = async function(id) {
@@ -619,85 +614,80 @@
     if (!confirm("Excluir este lançamento? Esta ação não pode ser desfeita.")) return;
     try {
       await deleteLancamento(id);
-      allDocs = allDocs.filter(d => d.id !== id);
-      selectedIds.delete(id);
-      applyFilters();
-      updateCountSelecionados();
-    } catch (e) {
-      alert("Erro ao excluir: " + (e.message || "tente novamente"));
+    } catch(e) {
+      alert("Erro ao excluir no servidor: " + (e.message || "verifique a conexão"));
     }
+    allDocs = allDocs.filter(d => d.id !== id);
+    selectedIds.delete(id);
+    applyFilters();
+    updateCountSelecionados();
   };
 
-  document.getElementById("table-lancamentos")?.addEventListener("click", function(e) {
-    const btn = e.target.closest(".btn-acao-lanc");
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const id = btn.getAttribute("data-id");
-    const acao = btn.getAttribute("data-acao");
-    if (!id) return;
-    if (acao === "ver") window.openDetalhe(id);
-    else if (acao === "editar") window.openEdicao(id);
-    else if (acao === "excluir") window.apagarUmLancamento(id);
-  });
-
   window.apagarSelecionados = async function() {
+    document.getElementById("dropdown-apagar-menu").classList.add("hidden");
     const ids = [...selectedIds];
     if (!ids.length) {
       alert("Nenhum lançamento selecionado. Marque as caixas para selecionar.");
-      document.getElementById("dropdown-apagar-menu").classList.add("hidden");
       return;
     }
-    if (!confirm(`Apagar ${ids.length} lançamento(s) selecionado(s)? Esta ação não pode ser desfeita.`)) {
-      document.getElementById("dropdown-apagar-menu").classList.add("hidden");
-      return;
-    }
-    document.getElementById("dropdown-apagar-menu").classList.add("hidden");
+    if (!confirm(`Excluir ${ids.length} lançamento(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
     try {
-      for (const id of ids) {
-        await deleteLancamento(id);
-      }
-      allDocs = allDocs.filter(d => !ids.includes(d.id));
-      selectedIds.clear();
-      applyFilters();
-      updateCountSelecionados();
-      alert(ids.length + " lançamento(s) apagado(s) com sucesso.");
-    } catch (e) {
-      alert("Erro ao apagar: " + (e.message || "tente novamente"));
-    }
+      for (const id of ids) { await deleteLancamento(id); }
+    } catch(e) {}
+    allDocs = allDocs.filter(d => !ids.includes(d.id));
+    selectedIds.clear();
+    applyFilters();
+    updateCountSelecionados();
+    alert(ids.length + " lançamento(s) excluído(s) com sucesso.");
   };
 
   window.apagarPorOrigem = async function(origem) {
+    document.getElementById("dropdown-apagar-menu").classList.add("hidden");
     const lista = allDocs.filter(d => (d.origem || "manual") === origem);
     if (!lista.length) {
       alert(origem === "pdf" ? "Nenhum lançamento importado do PDF encontrado." : "Nenhum lançamento manual encontrado.");
-      document.getElementById("dropdown-apagar-menu").classList.add("hidden");
       return;
     }
-    if (!confirm(`Apagar ${lista.length} lançamento(s) ${origem === "pdf" ? "importados do PDF" : "manuais"}? Esta ação não pode ser desfeita.`)) {
-      document.getElementById("dropdown-apagar-menu").classList.add("hidden");
-      return;
-    }
-    document.getElementById("dropdown-apagar-menu").classList.add("hidden");
+    if (!confirm(`Excluir ${lista.length} lançamento(s) ${origem === "pdf" ? "importados do PDF" : "manuais"}? Esta ação não pode ser desfeita.`)) return;
     try {
-      for (const d of lista) {
-        await deleteLancamento(d.id);
-      }
-      allDocs = allDocs.filter(d => (d.origem || "manual") !== origem);
-      selectedIds.clear();
-      applyFilters();
-      updateCountSelecionados();
-      alert(lista.length + " lançamento(s) apagado(s) com sucesso.");
-    } catch (e) {
-      alert("Erro ao apagar: " + (e.message || "tente novamente"));
-    }
+      for (const d of lista) { await deleteLancamento(d.id); }
+    } catch(e) {}
+    allDocs = allDocs.filter(d => (d.origem || "manual") !== origem);
+    selectedIds.clear();
+    applyFilters();
+    updateCountSelecionados();
+    alert(lista.length + " lançamento(s) excluído(s) com sucesso.");
   };
 
-  window.closeModal = id => document.getElementById(id).classList.remove("open");
+  window.apagarUltimoImport = async function() {
+    const ids = getUltimoImportIds();
+    if (!ids.length) return;
+    if (!confirm(`Remover ${ids.length} lançamento(s) do último PDF importado? Esta ação não pode ser desfeita.`)) return;
+    const btn = document.getElementById("btn-apagar-ultimo-import");
+    if (btn) btn.disabled = true;
+    try {
+      for (const id of ids) { await deleteLancamento(id); }
+      setUltimoImportIds([]);
+      allDocs = await getLancamentos();
+      applyFilters();
+      alert("Lançamentos do último import removidos com sucesso.");
+    } catch (e) {
+      alert("Erro ao remover: " + (e.message || "tente novamente"));
+    }
+    if (btn) btn.disabled = false;
+  };
 
   let lancamentosParaImportar = [];
   let impEditIdx = -1;
   const KEY_ULTIMO_IMPORT = "portal_ultimo_import_ids";
+
+  loadAll();
+  const authResult = await requireAuth();
+  if (authResult) {
+    admin = isAdmin(authResult.profile);
+    applyFilters();
+    setUltimoImportIds(getUltimoImportIds());
+  }
 
   function getUltimoImportIds() {
     try {
