@@ -1,78 +1,73 @@
 /**
- * Parser de extrato bancário em PDF
- * Colunas: Dia, Lote, Documento, Histórico, Valor
+ * Parser de extrato bancário em PDF - Banco do Brasil
+ * Colunas: Dia | Lote | Documento | Histórico | Valor
  * - Lote: desconsiderado (ignorado)
  * - Documento: → Nº do Documento / Recibo
- * - Histórico: → Descrição * (somente o texto da coluna histórico)
- * Valor: "1.234,56 (+)" = crédito/receita, "1.234,56 (-)" = débito/despesa
- * Ignora: Saldo Anterior, Saldo do dia, Saldo
+ * - Histórico: → Descrição *
+ * Valor: "1.234,56 (+)" = receita, "1.234,56 (-)" = despesa
+ * Ignora linhas com "saldo"
+ *
+ * LÓGICA: Para cada valor encontrado, busca a data/doc/descrição NO TEXTO
+ * ANTERIOR ao valor (não posterior), pois no extrato a data vem antes do valor.
  */
 
-const VALOR_REGEX = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*\(\s*([+-])\s*\)/g;
-const DATA_REGEX = /(\d{2})\/(\d{2})\/(\d{4})/g;
-const EXCLUIR_PALAVRAS = ["saldo anterior", "saldo do dia", "saldo"];
-const EXCLUIR_REGEX = /s\s*a\s*l\s*d\s*o/i;
+// Formato principal: 1.234,56 (+) ou 1.234,56 (-)
+const VALOR_PAREN = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*\(\s*([+\-])\s*\)/g;
+// Formato alternativo: 1.234,56 + ou 1.234,56 - (sem parênteses)
+const VALOR_SIGN  = /(\d{1,3}(?:\.\d{3})*,\d{2})\s+([+\-])(?=[\s,]|$)/g;
+// Formato C/D: 1.234,56 C ou 1.234,56 D
+const VALOR_CD    = /(\d{1,3}(?:\.\d{3})*,\d{2})\s+([CD])(?=[\s,]|$)/g;
+
+const EXCLUIR_RE  = /saldo/i;
+const DATA_RE     = /\b(\d{2})\/(\d{2})\/(\d{4})\b/;
 
 function parseValor(str) {
-  const n = parseFloat(str.replace(/\./g, "").replace(",", "."));
-  return isNaN(n) ? 0 : n;
-}
-
-function dataParaISO(dd, mm, yy) {
-  if (!dd || !mm || !yy || dd === "00" || mm === "00") return null;
-  return `${yy}-${mm}-${dd}`;
+  return parseFloat(str.replace(/\./g, "").replace(",", ".")) || 0;
 }
 
 /**
- * Extrai lançamentos do texto extraído do PDF
- * @param {string} text - Texto bruto do PDF
- * @returns {Array<{data:string,tipo:string,valor:number,numeroDocumento:string,observacoes:string,descricao:string}>}
+ * Processa uma lista de matches de valor usando "look before":
+ * O bloco relevante para cada valor é o texto ANTES do valor (desde o final
+ * do valor anterior até o início do valor atual). Isso captura a linha do
+ * extrato que precede o valor (data, lote, documento, histórico).
  */
-export function extrairLancamentosDoTexto(text) {
-  if (!text || typeof text !== "string") return [];
+function processar(normalizado, matches, sinalParaTipo) {
   const resultado = [];
-  const valorMatches = [...text.matchAll(VALOR_REGEX)];
 
-  for (let i = 0; i < valorMatches.length; i++) {
-    const valorStr = valorMatches[i][1];
-    const sinal = valorMatches[i][2];
-    const pos = valorMatches[i].index;
-    const nextPos = valorMatches[i + 1] ? valorMatches[i + 1].index : text.length;
-    const bloco = text.slice(pos, nextPos);
+  for (let i = 0; i < matches.length; i++) {
+    const valor     = parseValor(matches[i][1]);
+    const tipo      = sinalParaTipo(matches[i][2]);
+    const matchStart = matches[i].index;
 
-    const valor = parseValor(valorStr);
-    const tipo = sinal === "+" ? "receita" : "despesa";
+    // Texto entre o fim do valor anterior e o início do valor atual
+    const prevEnd = i > 0 ? (matches[i - 1].index + matches[i - 1][0].length) : 0;
+    const bloco   = normalizado.slice(prevEnd, matchStart).trim();
 
-    const dataMatch = bloco.match(DATA_REGEX);
-    const dataStr = dataMatch ? dataMatch[0] : null;
-    if (!dataStr) continue;
-    const [dd, mm, yy] = dataStr.split("/");
-    if (dd === "00" && mm === "00") continue;
-    const data = dataParaISO(dd, mm, yy);
-    if (!data) continue;
+    if (!bloco) continue;
 
-    const historicoLower = bloco.toLowerCase();
-    if (EXCLUIR_PALAVRAS.some((p) => historicoLower.includes(p))) continue;
-    if (EXCLUIR_REGEX.test(bloco)) continue;
+    // Ignora linhas de saldo (Saldo Anterior, Saldo do Dia, etc.)
+    if (EXCLUIR_RE.test(bloco)) continue;
 
-    // Resto do bloco: remove data e valor (Lote, Documento, Histórico)
+    // Encontra a data no bloco (DD/MM/YYYY)
+    const dataM = bloco.match(DATA_RE);
+    if (!dataM) continue;
+    const data = `${dataM[3]}-${dataM[2]}-${dataM[1]}`;
+
+    // Remove a data do bloco para processar o restante
     let resto = bloco
-      .replace(VALOR_REGEX, "")
-      .replace(/^\s*\d{2}\/\d{2}\/\d{4}\s*/, "")
+      .replace(/\b\d{2}\/\d{2}\/\d{4}\b/g, "")
       .replace(/\s+/g, " ")
       .trim();
 
-    // Documento: coluna documento → Nº do Documento / Recibo (número longo 10-20 dígitos)
-    const docMatch = resto.match(/\b(\d{10,20})\b/);
-    const numeroDocumento = docMatch ? docMatch[1] : null;
+    // Extrai número do documento (10–20 dígitos consecutivos)
+    const docM = resto.match(/\b(\d{10,20})\b/);
+    const numeroDocumento = docM ? docM[1] : null;
+    if (docM) resto = resto.replace(docM[0], "").replace(/\s+/g, " ").trim();
 
-    // Remove documento do resto; o que sobra = Histórico (Lote é desconsiderado)
-    let historico = docMatch ? resto.replace(docMatch[0], "").trim() : resto;
-    // Remove possível lote (número curto 1-6 dígitos no início)
-    historico = historico.replace(/^\s*\d{1,6}\s+/, "").trim();
+    // Remove lote: número curto (1–6 dígitos) no início
+    resto = resto.replace(/^\d{1,6}\s+/, "").replace(/\s+/g, " ").trim();
 
-    // Somente o texto da coluna Histórico → Descrição *
-    const descricao = historico || (tipo === "receita" ? "Importado - Receita" : "Importado - Despesa");
+    const descricao = resto || (tipo === "receita" ? "Importado - Receita" : "Importado - Despesa");
 
     resultado.push({
       data,
@@ -85,4 +80,52 @@ export function extrairLancamentosDoTexto(text) {
   }
 
   return resultado;
+}
+
+/**
+ * Extrai lançamentos do texto bruto do PDF.
+ * Tenta três formatos de valor em ordem de preferência.
+ * @param {string} text - Texto completo extraído do PDF pelo pdf.js
+ * @returns {Array} Array de objetos {data, tipo, valor, numeroDocumento, observacoes, descricao}
+ */
+export function extrairLancamentosDoTexto(text) {
+  if (!text || typeof text !== "string") return [];
+
+  // Normaliza espaços e quebras de linha
+  const normalizado = text.replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim();
+
+  // --- Tentativa 1: 1.234,56 (+) ou 1.234,56 (-) ---
+  const m1 = [...normalizado.matchAll(VALOR_PAREN)];
+  if (m1.length > 0) {
+    const r = processar(normalizado, m1, s => s === "+" ? "receita" : "despesa");
+    if (r.length > 0) return r;
+  }
+
+  // --- Tentativa 2: 1.234,56 + ou 1.234,56 - (sem parênteses) ---
+  const m2 = [...normalizado.matchAll(VALOR_SIGN)];
+  if (m2.length > 0) {
+    const r = processar(normalizado, m2, s => s === "+" ? "receita" : "despesa");
+    if (r.length > 0) return r;
+  }
+
+  // --- Tentativa 3: notação C/D ---
+  const m3 = [...normalizado.matchAll(VALOR_CD)];
+  if (m3.length > 0) {
+    const r = processar(normalizado, m3, s => s === "C" ? "receita" : "despesa");
+    if (r.length > 0) return r;
+  }
+
+  return [];
+}
+
+/**
+ * Retorna uma amostra do texto extraído para fins de diagnóstico.
+ * Útil para depurar quando o parser não encontra lançamentos.
+ * @param {string} text
+ * @returns {string}
+ */
+export function diagnosticarTexto(text) {
+  if (!text) return "(texto vazio)";
+  const normalizado = text.replace(/\s+/g, " ").trim();
+  return normalizado.slice(0, 400);
 }

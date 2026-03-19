@@ -268,7 +268,7 @@
   import { CATEGORIAS_RECEITA, CATEGORIAS_DESPESA, FORMAS_PAGAMENTO_PADRAO } from "../js/config.js";
   import { renderLayout } from "../js/layout.js";
   import { getLancamentos, deleteLancamento, updateLancamento, addLancamento, getCategoriasCustom, getFormasPagamentoCustom } from "../js/api.js";
-  import { extrairLancamentosDoTexto } from "../js/extrato-parser.js";
+  import { extrairLancamentosDoTexto, diagnosticarTexto } from "../js/extrato-parser.js";
 
   function showError(msg) {
     const tbody = document.getElementById("tbody-lanc");
@@ -904,9 +904,20 @@
       let fullText = "";
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i);
-        const text = await page.getTextContent();
-        fullText += text.items.map((x) => x.str || "").join(" ") + " ";
+        const textContent = await page.getTextContent();
+        // Constrói texto preservando espaços entre itens da mesma linha
+        const items = textContent.items;
+        let pageText = "";
+        for (let j = 0; j < items.length; j++) {
+          const item = items[j];
+          const next = items[j + 1];
+          pageText += item.str || "";
+          // Adiciona espaço se há próximo item (ou se o item atual não termina com espaço)
+          if (next && !(item.str || "").endsWith(" ")) pageText += " ";
+        }
+        fullText += pageText + " ";
       }
+      console.log("[PDF Debug] Texto extraído (primeiros 600 chars):", fullText.slice(0, 600));
       lancamentosParaImportar = extrairLancamentosDoTexto(fullText).map((l) => ({
         ...l,
         categoria: l.tipo === "receita" ? "Outras Receitas" : "Outras Despesas",
@@ -914,7 +925,9 @@
         responsavel: null,
       }));
       if (lancamentosParaImportar.length === 0) {
-        alertEl.textContent = "Nenhum lançamento encontrado no PDF. Verifique o formato.";
+        const amostra = diagnosticarTexto(fullText);
+        alertEl.innerHTML = `<strong>Nenhum lançamento encontrado no PDF.</strong><br/>
+          <small>Texto extraído do PDF (amostra):<br/><code style="font-size:.75rem;word-break:break-all;">${amostra.replace(/</g,"&lt;")}</code></small>`;
         alertEl.className = "alert alert-error";
         document.getElementById("import-preview").classList.add("hidden");
         document.getElementById("btn-confirmar-import").disabled = true;
