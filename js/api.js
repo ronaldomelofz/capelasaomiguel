@@ -165,6 +165,7 @@ function toLancamento(row) {
     mes: r.mes ?? null,
     ano: r.ano ?? null,
     criadoEm: r.criado_em ?? r.criadoEm ?? null,
+    origem: r.origem ?? "manual",
   };
 }
 
@@ -192,6 +193,7 @@ async function syncPendingLancamentos() {
           criado_por_email: item.criadoPorEmail ?? null,
           mes: item.mes ?? null,
           ano: item.ano ?? null,
+          origem: item.origem ?? "manual",
         };
         await req("POST", "/lancamentos", row);
       } catch (e) {
@@ -228,6 +230,7 @@ export async function getLancamentos() {
 
 export async function addLancamento(obj) {
   const id = "l" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+  const origem = obj.origem ?? "manual";
   const item = {
     id,
     tipo: obj.tipo,
@@ -244,6 +247,7 @@ export async function addLancamento(obj) {
     mes: obj.mes ?? null,
     ano: obj.ano ?? null,
     criadoEm: new Date().toISOString(),
+    origem,
   };
 
   try {
@@ -252,7 +256,7 @@ export async function addLancamento(obj) {
       responsavel: obj.responsavel ?? null, observacoes: obj.observacoes ?? null,
       numero_documento: obj.numeroDocumento ?? null, forma_pagamento: obj.formaPagamento ?? null,
       criado_por: obj.criadoPor ?? null, criado_por_email: obj.criadoPorEmail ?? null,
-      mes: obj.mes ?? null, ano: obj.ano ?? null,
+      mes: obj.mes ?? null, ano: obj.ano ?? null, origem,
     };
     const data = await req("POST", "/lancamentos", row);
     const inserted = Array.isArray(data) ? data[0] : data;

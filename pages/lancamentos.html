@@ -5,6 +5,7 @@
   <title>Lançamentos — Capela São Miguel Arcanjo</title>
   <link rel="stylesheet" href="../css/main.css" />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+  <style>.dropdown-item:hover{background:var(--border, #eee);}</style>
 </head>
 <body>
 
@@ -13,6 +14,15 @@
   <div class="topbar-actions">
     <button class="btn btn-outline admin-only" onclick="abrirModalImportar()">📥 Importar Extrato</button>
     <button class="btn btn-outline admin-only" id="btn-apagar-ultimo-import" onclick="apagarUltimoImport()" style="display:none;" title="Remove os lançamentos do último PDF importado">🗑 Apagar último import</button>
+    <div class="dropdown admin-only" style="position:relative;display:inline-block;">
+      <button class="btn btn-outline" id="btn-apagar-varios" type="button" onclick="toggleDropdownApagar(event)" title="Apagar vários lançamentos">🗑 Apagar Vários</button>
+      <div id="dropdown-apagar-menu" class="hidden" onclick="event.stopPropagation()" style="position:absolute;top:100%;left:0;margin-top:4px;min-width:220px;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:100;padding:.5rem 0;">
+        <button type="button" class="dropdown-item" style="display:block;width:100%;text-align:left;padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;" onclick="apagarPorOrigem('pdf')">Apagar lançamentos importados do PDF</button>
+        <button type="button" class="dropdown-item" style="display:block;width:100%;text-align:left;padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;" onclick="apagarPorOrigem('manual')">Apagar lançamentos manuais</button>
+        <hr style="margin:.5rem 0;border:none;border-top:1px solid var(--border);"/>
+        <button type="button" class="dropdown-item" style="display:block;width:100%;text-align:left;padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;" onclick="apagarSelecionados()">Apagar selecionados (<span id="count-selecionados">0</span>)</button>
+      </div>
+    </div>
     <a href="novo.html" class="btn btn-success admin-only">+ Novo</a>
   </div>
 </div>
@@ -64,13 +74,14 @@
       <table>
         <thead>
           <tr>
+            <th class="text-center" style="width:40px;"><input type="checkbox" id="select-all-lanc" title="Selecionar todos desta página" class="admin-only"></th>
             <th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th>
             <th>Forma Pagto</th><th>Responsável</th><th class="text-right">Valor</th>
             <th class="text-center">Ações</th>
           </tr>
         </thead>
         <tbody id="tbody-lanc">
-          <tr><td colspan="8" class="text-center text-muted" style="padding:2rem">Carregando...</td></tr>
+          <tr><td colspan="9" class="text-center text-muted" style="padding:2rem">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -272,6 +283,7 @@
     let currentPage = 1;
     const PAGE_SIZE = 20;
     let selectedId = null;
+    let selectedIds = new Set();
     let admin = false;
 
     // Fill selects (mês, ano)
@@ -349,14 +361,16 @@
     const tbody = document.getElementById("tbody-lanc");
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">📭</div><h4>Nenhum lançamento encontrado</h4><p>Ajuste os filtros ou cadastre novos lançamentos.</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">📭</div><h4>Nenhum lançamento encontrado</h4><p>Ajuste os filtros ou cadastre novos lançamentos.</p></div></td></tr>`;
       document.getElementById("pag-info").textContent = "";
       document.getElementById("pag-controls").innerHTML = "";
+      updateCountSelecionados();
       return;
     }
 
     tbody.innerHTML = page.map(d => `
       <tr>
+        <td class="text-center">${admin ? `<input type="checkbox" class="lanc-checkbox" data-id="${d.id}" ${selectedIds.has(d.id) ? "checked" : ""}>` : ""}</td>
         <td>${formatDate(d.data)}</td>
         <td><span class="badge badge-${d.tipo}">${d.tipo === "receita" ? "Receita" : "Despesa"}</span></td>
         <td>${d.categoria || "—"}</td>
@@ -367,8 +381,26 @@
         <td class="text-center">
           <button class="btn btn-outline btn-sm" onclick="openDetalhe('${d.id}')">👁 Ver</button>
           ${admin ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openEdicao('${d.id}')">✏️ Editar</button>` : ""}
+          ${admin ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();apagarUmLancamento('${d.id}')" title="Apagar">🗑 Apagar</button>` : ""}
         </td>
       </tr>`).join("");
+
+    const selectAllEl = document.getElementById("select-all-lanc");
+    if (selectAllEl) {
+      selectAllEl.checked = page.length > 0 && page.every(d => selectedIds.has(d.id));
+      selectAllEl.onclick = function() {
+        page.forEach(d => { if (this.checked) selectedIds.add(d.id); else selectedIds.delete(d.id); });
+        renderPage();
+      };
+    }
+    tbody.querySelectorAll(".lanc-checkbox").forEach(cb => {
+      cb.addEventListener("change", function() {
+        const id = this.getAttribute("data-id");
+        if (this.checked) selectedIds.add(id); else selectedIds.delete(id);
+        updateCountSelecionados();
+      });
+    });
+    updateCountSelecionados();
 
     // Pagination
     const total = filtered.length;
@@ -560,9 +592,92 @@
     if (!confirm("Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.")) return;
     await deleteLancamento(selectedId);
     allDocs = allDocs.filter(d => d.id !== selectedId);
+    selectedIds.delete(selectedId);
     closeModal("modal-detalhe");
     applyFilters();
     alert("Lançamento excluído com sucesso.");
+  };
+
+  function updateCountSelecionados() {
+    const el = document.getElementById("count-selecionados");
+    if (el) el.textContent = selectedIds.size;
+  }
+
+  window.toggleDropdownApagar = function(e) {
+    e.stopPropagation();
+    const menu = document.getElementById("dropdown-apagar-menu");
+    if (menu) menu.classList.toggle("hidden");
+  };
+
+  document.addEventListener("click", function() {
+    const menu = document.getElementById("dropdown-apagar-menu");
+    if (menu && !menu.classList.contains("hidden")) menu.classList.add("hidden");
+  });
+
+  window.apagarUmLancamento = async function(id) {
+    if (!id) return;
+    if (!confirm("Apagar este lançamento? Esta ação não pode ser desfeita.")) return;
+    try {
+      await deleteLancamento(id);
+      allDocs = allDocs.filter(d => d.id !== id);
+      selectedIds.delete(id);
+      applyFilters();
+      updateCountSelecionados();
+    } catch (e) {
+      alert("Erro ao apagar: " + (e.message || "tente novamente"));
+    }
+  };
+
+  window.apagarSelecionados = async function() {
+    const ids = [...selectedIds];
+    if (!ids.length) {
+      alert("Nenhum lançamento selecionado. Marque as caixas para selecionar.");
+      document.getElementById("dropdown-apagar-menu").classList.add("hidden");
+      return;
+    }
+    if (!confirm(`Apagar ${ids.length} lançamento(s) selecionado(s)? Esta ação não pode ser desfeita.`)) {
+      document.getElementById("dropdown-apagar-menu").classList.add("hidden");
+      return;
+    }
+    document.getElementById("dropdown-apagar-menu").classList.add("hidden");
+    try {
+      for (const id of ids) {
+        await deleteLancamento(id);
+      }
+      allDocs = allDocs.filter(d => !ids.includes(d.id));
+      selectedIds.clear();
+      applyFilters();
+      updateCountSelecionados();
+      alert(ids.length + " lançamento(s) apagado(s) com sucesso.");
+    } catch (e) {
+      alert("Erro ao apagar: " + (e.message || "tente novamente"));
+    }
+  };
+
+  window.apagarPorOrigem = async function(origem) {
+    const lista = allDocs.filter(d => (d.origem || "manual") === origem);
+    if (!lista.length) {
+      alert(origem === "pdf" ? "Nenhum lançamento importado do PDF encontrado." : "Nenhum lançamento manual encontrado.");
+      document.getElementById("dropdown-apagar-menu").classList.add("hidden");
+      return;
+    }
+    if (!confirm(`Apagar ${lista.length} lançamento(s) ${origem === "pdf" ? "importados do PDF" : "manuais"}? Esta ação não pode ser desfeita.`)) {
+      document.getElementById("dropdown-apagar-menu").classList.add("hidden");
+      return;
+    }
+    document.getElementById("dropdown-apagar-menu").classList.add("hidden");
+    try {
+      for (const d of lista) {
+        await deleteLancamento(d.id);
+      }
+      allDocs = allDocs.filter(d => (d.origem || "manual") !== origem);
+      selectedIds.clear();
+      applyFilters();
+      updateCountSelecionados();
+      alert(lista.length + " lançamento(s) apagado(s) com sucesso.");
+    } catch (e) {
+      alert("Erro ao apagar: " + (e.message || "tente novamente"));
+    }
   };
 
   window.closeModal = id => document.getElementById(id).classList.remove("open");
@@ -867,6 +982,7 @@
           ano: parseInt(y, 10),
           criadoPor: authResult?.user?.uid ?? null,
           criadoPorEmail: authResult?.user?.email ?? null,
+          origem: "pdf",
         });
         if (inserted && inserted.id) idsImportados.push(inserted.id);
         ok++;

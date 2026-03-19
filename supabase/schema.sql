@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS lancamentos (
   criado_por_email TEXT,
   mes INT,
   ano INT,
-  criado_em TIMESTAMPTZ DEFAULT NOW()
+  criado_em TIMESTAMPTZ DEFAULT NOW(),
+  origem TEXT DEFAULT 'manual'
 );
 
 CREATE INDEX IF NOT EXISTS idx_lancamentos_data ON lancamentos(data DESC);
