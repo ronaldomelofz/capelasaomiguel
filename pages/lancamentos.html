@@ -379,9 +379,9 @@
         <td>${d.responsavel || "—"}</td>
         <td class="text-right val-${d.tipo}">${formatBRL(d.valor)}</td>
         <td class="text-center">
-          <button class="btn btn-outline btn-sm" onclick="openDetalhe('${d.id}')">👁 Ver</button>
-          ${admin ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openEdicao('${d.id}')">✏️ Editar</button>` : ""}
-          ${admin ? `<button type="button" class="btn btn-outline btn-sm btn-excluir-lanc" data-id="${d.id}" title="Excluir">🗑 Excluir</button>` : ""}
+          <button type="button" class="btn btn-outline btn-sm btn-acao-lanc" data-acao="ver" data-id="${d.id}">👁 Ver</button>
+          ${admin ? `<button type="button" class="btn btn-outline btn-sm btn-acao-lanc" data-acao="editar" data-id="${d.id}">✏️ Editar</button>` : ""}
+          ${admin ? `<button type="button" class="btn btn-outline btn-sm btn-acao-lanc" data-acao="excluir" data-id="${d.id}">🗑 Excluir</button>` : ""}
         </td>
       </tr>`).join("");
 
@@ -629,13 +629,16 @@
   };
 
   document.getElementById("table-lancamentos")?.addEventListener("click", function(e) {
-    const btn = e.target.closest(".btn-excluir-lanc");
-    if (btn) {
-      e.preventDefault();
-      e.stopPropagation();
-      const id = btn.getAttribute("data-id");
-      if (id) apagarUmLancamento(id);
-    }
+    const btn = e.target.closest(".btn-acao-lanc");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const id = btn.getAttribute("data-id");
+    const acao = btn.getAttribute("data-acao");
+    if (!id) return;
+    if (acao === "ver") window.openDetalhe(id);
+    else if (acao === "editar") window.openEdicao(id);
+    else if (acao === "excluir") window.apagarUmLancamento(id);
   });
 
   window.apagarSelecionados = async function() {
