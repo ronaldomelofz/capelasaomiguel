@@ -48,11 +48,11 @@ Edite `js/supabase-config.js` com a URL e chave anon. Este arquivo está no `.gi
 
 O sistema foi projetado para funcionar mesmo com falhas temporárias:
 
-- **Retry automático**: até 3 tentativas com backoff exponencial (1s, 2s, 4s) em erros de rede
-- **Timeout**: 15 segundos por requisição para evitar travamentos
-- **Fallback localStorage**: se o Supabase não responder, os dados são salvos localmente
-- **Fila de sincronização**: lançamentos feitos offline são enviados ao Supabase quando a conexão voltar
-- **Indicador de status**: na barra lateral, mostra "Conectado", "Modo local" ou "Sincronizando"
+- **Retry automático**: até 3 tentativas com backoff em erros de rede ou 5xx
+- **Timeout**: 8 segundos por requisição
+- **Fila local (backup)**: se o POST falhar, o lançamento entra na fila para nova tentativa, mas a interface mostra **erro** (não simula sucesso)
+- **Sincronização**: ao reconectar, `getLancamentos()` tenta enviar a fila pendente
+- **Indicador na sidebar**: "Conectado ao servidor", "Sem conexão" ou "Sincronizando"; ao abrir o site é feito um ping ao Supabase
 
 O Supabase é um serviço cloud com alta disponibilidade. Em caso de "Failed to fetch", verifique:
 - Variáveis de ambiente no Netlify (SUPABASE_URL e SUPABASE_ANON_KEY)

@@ -34,6 +34,18 @@ export function onConnectionStatusChange(fn) {
   return () => { _statusListeners = _statusListeners.filter(x => x !== fn); };
 }
 
+/**
+ * Verifica se o Supabase responde (atualiza o indicador via req → setStatus).
+ * Não lança erro: falha silenciosa deixa status como offline.
+ */
+export async function pingSupabase() {
+  try {
+    await req("GET", "/lancamentos?select=id&limit=1");
+  } catch {
+    /* setStatus("offline") já aplicado em req */
+  }
+}
+
 function headers() {
   const key = SUPABASE_ANON_KEY;
   if (!key || !SUPABASE_URL || SUPABASE_URL.includes("SEU_PROJETO")) {
@@ -262,6 +274,7 @@ export async function addLancamento(obj) {
     const inserted = Array.isArray(data) ? data[0] : data;
     return inserted ? toLancamento(inserted) : item;
   } catch (e) {
+    // Mantém fila local para tentar sincronizar depois, mas o chamador deve tratar falha no servidor
     try {
       const list = loadLocal(KEY_LANCAMENTOS);
       list.unshift(item);
@@ -272,7 +285,12 @@ export async function addLancamento(obj) {
     } catch (localErr) {
       console.error("Fallback localStorage falhou:", localErr);
     }
-    return item;
+    const err = e instanceof Error ? e : new Error(String(e));
+    err.localQueued = true;
+    err.userMessage =
+      (err.message || "Não foi possível salvar no banco de dados.") +
+      " Verifique sua internet e as permissões do Supabase (RLS/policies).";
+    throw err;
   }
 }
 
@@ -305,9 +323,12 @@ export async function updateLancamento(id, obj) {
       const pIdx = pending.findIndex(x => x.id === id);
       if (pIdx >= 0) pending[pIdx] = { ...pending[pIdx], ...item };
       savePendingLancamentos(pending);
-      return item;
     }
-    return { ...obj, id };
+    const err = e instanceof Error ? e : new Error(String(e));
+    err.userMessage =
+      (err.message || "Não foi possível atualizar no banco de dados.") +
+      " Verifique sua conexão e o Supabase.";
+    throw err;
   }
 }
 

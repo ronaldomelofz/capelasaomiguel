@@ -82,17 +82,20 @@ window.toggleSidebar = function() {
 function initConnectionStatus() {
   const el = document.getElementById("connection-status");
   if (!el) return;
-  const labels = { online: "● Conectado", offline: "○ Modo local (clique para tentar)", syncing: "⟳ Sincronizando" };
+  const labels = { online: "● Conectado ao servidor", offline: "○ Sem conexão — clique para tentar", syncing: "⟳ Sincronizando com o servidor" };
   const classes = { online: "status-online", offline: "status-offline status-clickable", syncing: "status-syncing" };
   function update(s) {
     el.textContent = labels[s] || labels.online;
     el.className = "connection-status " + (classes[s] || classes.online);
   }
-  import("./api.js").then(({ onConnectionStatusChange, getConnectionStatus, getLancamentos }) => {
+  import("./api.js").then(({ onConnectionStatusChange, getConnectionStatus, getLancamentos, pingSupabase }) => {
     onConnectionStatusChange(update);
+    // Ao carregar qualquer página, testa o Supabase e atualiza o indicador
+    pingSupabase().then(() => update(getConnectionStatus())).catch(() => update(getConnectionStatus()));
     el.onclick = () => {
       if (getConnectionStatus() === "offline") {
-        el.textContent = "⟳ Tentando...";
+        el.textContent = "⟳ Tentando reconectar...";
+        pingSupabase().then(() => update(getConnectionStatus())).catch(() => update("offline"));
         getLancamentos().then(() => update(getConnectionStatus())).catch(() => update("offline"));
       }
     };

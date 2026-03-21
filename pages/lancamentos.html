@@ -600,7 +600,7 @@
       window.closeModal("modal-editar");
       applyFilters();
     } catch (e) {
-      alertEl.textContent = "Erro ao salvar: " + (e.message || "tente novamente");
+      alertEl.textContent = "Erro ao salvar: " + (e?.userMessage || e?.message || "tente novamente");
       alertEl.className = "alert alert-error";
     }
     btn.disabled = false;
