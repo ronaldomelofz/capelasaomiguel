@@ -16,6 +16,15 @@ O sistema usa **Supabase** como banco de dados — PostgreSQL open-source, gratu
 3. Copie todo o conteúdo de `supabase/schema.sql`
 4. Cole e execute (Run)
 
+### Migração: coluna `origem` (PDF vs manual)
+
+Se você criou o banco **antes** desta coluna existir, ou vê erro *"Could not find the 'origem' column"*, execute **uma vez** no **SQL Editor**:
+
+1. Abra o arquivo `supabase/EXECUTAR_NO_SQL_EDITOR.sql` (ou `supabase/migrations/add_origem_lancamentos.sql`)
+2. Copie o `ALTER TABLE ...` e rode no Supabase (**Run**)
+
+Sem isso, o app ainda grava lançamentos (fallback sem `origem`), mas **importação PDF** e filtros por origem no servidor só ficam corretos após a migração.
+
 ## 3. Configurar credenciais
 
 ### Netlify (recomendado — credenciais protegidas)

@@ -120,6 +120,31 @@ async function req(method, path, body) {
   throw lastError || new Error("Erro na requisição");
 }
 
+/** Erro do PostgREST quando a coluna ainda não existe no projeto Supabase (migração não aplicada). */
+function isMissingOrigemColumnError(e) {
+  const m = (e?.message || "").toLowerCase();
+  return m.includes("origem") && (m.includes("column") || m.includes("schema") || m.includes("cache") || m.includes("find"));
+}
+
+/**
+ * POST em lancamentos: tenta com `origem`; se o banco não tiver a coluna, repete sem ela.
+ * Após rodar supabase/migrations/add_origem_lancamentos.sql no SQL Editor, a primeira tentativa já funciona.
+ */
+async function postLancamentoRow(row) {
+  try {
+    return await req("POST", "/lancamentos", row);
+  } catch (e) {
+    if (row.origem !== undefined && isMissingOrigemColumnError(e)) {
+      const { origem: _o, ...rest } = row;
+      console.warn(
+        "[api] Coluna origem ausente no Supabase — gravando sem origem. Execute: supabase/migrations/add_origem_lancamentos.sql"
+      );
+      return await req("POST", "/lancamentos", rest);
+    }
+    throw e;
+  }
+}
+
 function loadLocal(k) {
   try {
     const d = localStorage.getItem(k);
@@ -207,7 +232,7 @@ async function syncPendingLancamentos() {
           ano: item.ano ?? null,
           origem: item.origem ?? "manual",
         };
-        await req("POST", "/lancamentos", row);
+        await postLancamentoRow(row);
       } catch (e) {
         const isDuplicate = (e?.message || "").toLowerCase().includes("duplicate") || e?.status === 409;
         if (!isDuplicate) remaining.push(item);
@@ -270,7 +295,7 @@ export async function addLancamento(obj) {
       criado_por: obj.criadoPor ?? null, criado_por_email: obj.criadoPorEmail ?? null,
       mes: obj.mes ?? null, ano: obj.ano ?? null, origem,
     };
-    const data = await req("POST", "/lancamentos", row);
+    const data = await postLancamentoRow(row);
     const inserted = Array.isArray(data) ? data[0] : data;
     return inserted ? toLancamento(inserted) : item;
   } catch (e) {

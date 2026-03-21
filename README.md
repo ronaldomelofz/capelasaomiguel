@@ -32,7 +32,7 @@ Deploy no **Netlify** + **GitHub**. Funciona como livro razão digital: controle
 4. **Publish directory:** `.`
 5. Deploy
 
-**Configuração:** crie um projeto no [Supabase](https://supabase.com), execute `supabase/schema.sql` e preencha `js/supabase-config.js`. Veja `SUPABASE_SETUP.md`.
+**Configuração:** crie um projeto no [Supabase](https://supabase.com), execute `supabase/schema.sql` e, se o projeto já existia sem a coluna, rode também `supabase/EXECUTAR_NO_SQL_EDITOR.sql`. Preencha `js/supabase-config.js`. Veja `SUPABASE_SETUP.md`.
 
 ---
 
